@@ -130,7 +130,6 @@ class Game:
                                 else:
                                     self.draw(agent.holding.name, self.holding_size, self.holding_location((y, x)))
         pygame.display.flip()
-        pygame.display.update()
 
         for event in pygame.event.get():
             if event.type == QUIT:
