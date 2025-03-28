@@ -10,7 +10,6 @@ from ray.rllib.algorithms.ppo import PPOConfig
 from Agents import AlwaysStationaryRLM, RandomRLM
 import os
 
-
 def define_env():
     reward_config = {
         "metatask failed": 0,
@@ -21,7 +20,7 @@ def define_env():
         "step penalty": -1.,
     }
     env_params = {
-        "centralized": False,
+        "centralized": True,
         "grid_dim": [5, 5],
         "task": "tomato salad",
         "rewardList": reward_config,
@@ -36,56 +35,15 @@ def define_env():
         lambda _: get_overcooked_multi_class(env_params),
     )
 
-def define_agents(args):
-    '''
-    Define the human agent policy and the policies to train.
-    Can easily be extended to also define the AI policy
-    :param args:
-    :return: RLModuleSpec for the human agent, list for policies to train
-    '''
-    if args.rl_module == 'stationary':
-        human_policy = RLModuleSpec(module_class=AlwaysStationaryRLM)
-        policies_to_train = ['ai1', 'ai2']
-    elif args.rl_module == 'random':
-        human_policy = RLModuleSpec(module_class=RandomRLM)
-        policies_to_train = ['ai1', 'ai2']
-    elif args.rl_module == 'learned':
-        human_policy = RLModuleSpec()
-        policies_to_train = ['ai1', 'ai2,' 'human']
-    else:
-        raise NotImplementedError(f"{args.rl_module} not a valid human agent")
-    return human_policy, policies_to_train
 
-
-
-
-def define_training(human_policy, policies_to_train):
+def define_training():
     config = (
         PPOConfig()
-        .api_stack( #reduce some warning.
-            enable_rl_module_and_learner=True,
-            enable_env_runner_and_connector_v2=True,
-        )
         .environment("Overcooked")
         .env_runners( # define how many envs to run in parallel and resources per env
             num_envs_per_env_runner=1,
             num_cpus_per_env_runner=1,
             num_gpus_per_env_runner=0
-        )
-        .multi_agent(
-            policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
-            policy_mapping_fn=lambda aid, *a, **kw: aid,
-            policies_to_train=policies_to_train
-
-        )
-        .rl_module( # define what kind of policy each agent is
-            rl_module_spec=MultiRLModuleSpec(
-                rl_module_specs={
-                    #"human": human_policy,
-                    "ai1": RLModuleSpec(),
-                    "ai2": RLModuleSpec(),
-                }
-            ),
         )
         .training( # these are hyper paramters for PPO
             lr=1e-3,
@@ -121,8 +79,7 @@ def train(args, config):
 
 def main(args):
     define_env()
-    human_policy, policies_to_train = define_agents(args)
-    config = define_training(human_policy, policies_to_train)
+    config = define_training()
     train(args, config)
 
 if __name__ == "__main__":
