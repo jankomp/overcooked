@@ -37,26 +37,53 @@ def define_env():
 
 
 def define_training():
-    config = (
-        PPOConfig()
-        .environment("Overcooked")
-        .env_runners( # define how many envs to run in parallel and resources per env
-            num_envs_per_env_runner=1,
-            num_cpus_per_env_runner=1,
-            num_gpus_per_env_runner=0
+    gpu_enabled=True
+    if gpu_enabled:
+        config = (
+            PPOConfig()
+            .environment("Overcooked")
+            .env_runners(
+                num_env_runners=4,
+                num_envs_per_env_runner=20,
+                num_cpus_per_env_runner=4,
+                num_gpus_per_env_runner=0.25,
+            )
+            .training(  # these are hyperparameters for PPO
+                lr=1e-3,
+                lambda_=0.98,
+                gamma=0.99,
+                clip_param=0.05,
+                entropy_coeff=0.1,
+                vf_loss_coeff=0.1,
+                grad_clip=0.1,
+                num_epochs=10,
+                minibatch_size=64,
+            )
+            .resources(num_gpus=1)  # Resources for GPU usage
         )
-        .training( # these are hyper paramters for PPO
-            lr=1e-3,
-            lambda_=0.98,
-            gamma=0.99,
-            clip_param=0.05,
-            entropy_coeff=0.1,
-            vf_loss_coeff=0.1,
-            grad_clip=0.1,
-            num_epochs=10,
-            minibatch_size=64,
+    else:
+        print("GPU not enabled.")
+        config = (
+            PPOConfig()
+            .environment("Overcooked")
+            .env_runners(  # define how many envs to run in parallel and resources per env
+                num_envs_per_env_runner=1,
+                num_cpus_per_env_runner=1,
+                num_gpus_per_env_runner=0,
+            )
+            .training(  # these are hyperparameters for PPO
+                lr=1e-3,
+                lambda_=0.98,
+                gamma=0.99,
+                clip_param=0.05,
+                entropy_coeff=0.1,
+                vf_loss_coeff=0.1,
+                grad_clip=0.1,
+                num_epochs=10,
+                minibatch_size=64,
+            )
         )
-    )
+    
     return config
 
 
