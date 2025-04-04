@@ -11,7 +11,7 @@ from Agents import AlwaysStationaryRLM, RandomRLM
 import os
 
 
-def define_env():
+def define_env(centralized):
     reward_config = {
         "metatask failed": 0,
         "goodtask finished": 5,
@@ -21,7 +21,7 @@ def define_env():
         "step penalty": -1.,
     }
     env_params = {
-        "centralized": False,
+        "centralized": centralized,
         "grid_dim": [5, 5],
         "task": "tomato salad",
         "rewardList": reward_config,
@@ -59,7 +59,7 @@ def define_agents(args):
 
 
 
-def define_training(human_policy, policies_to_train):
+def define_training():
     config = (
         PPOConfig()
         .api_stack( #reduce some warning.
@@ -72,21 +72,21 @@ def define_training(human_policy, policies_to_train):
             num_cpus_per_env_runner=1,
             num_gpus_per_env_runner=0
         )
-        .multi_agent(
-            policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
-            policy_mapping_fn=lambda aid, *a, **kw: aid,
-            policies_to_train=policies_to_train
-
-        )
-        .rl_module( # define what kind of policy each agent is
-            rl_module_spec=MultiRLModuleSpec(
-                rl_module_specs={
-                    #"human": human_policy,
-                    "ai1": RLModuleSpec(),
-                    "ai2": RLModuleSpec(),
-                }
-            ),
-        )
+        #.multi_agent(
+        #    policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
+        #    policy_mapping_fn=lambda aid, *a, **kw: aid,
+        #    policies_to_train=policies_to_train
+#
+        #)
+        #.rl_module( # define what kind of policy each agent is
+        #    rl_module_spec=MultiRLModuleSpec(
+        #        rl_module_specs={
+        #            #"human": human_policy,
+        #            "ai1": RLModuleSpec(),
+        #            "ai2": RLModuleSpec(),
+        #        }
+        #    ),
+        #)
         .training( # these are hyper paramters for PPO
             lr=1e-3,
             lambda_=0.98,
@@ -106,7 +106,7 @@ def train(args, config):
     ray.init()
     current_dir = os.getcwd()
     storage_path = os.path.join(current_dir, args.save_dir) # save the results in the runs folder
-    experiment_name = f"{args.name}_{args.rl_module}_{int(time.time() * 1000)}" # add a timestamp to the name to make it unique
+    experiment_name = f"{"centralized" if args.centralized else "decentralized"}_{args.name}_{args.rl_module}_{int(time.time() * 1000)}" # add a timestamp to the name to make it unique
     tuner = tune.Tuner(
         "PPO",
         param_space=config,
@@ -120,9 +120,9 @@ def train(args, config):
     tuner.fit()
 
 def main(args):
-    define_env()
-    human_policy, policies_to_train = define_agents(args)
-    config = define_training(human_policy, policies_to_train)
+    define_env(args.centralized)
+    #human_policy, policies_to_train = define_agents(args)
+    config = define_training()
     train(args, config)
 
 if __name__ == "__main__":
@@ -132,6 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned")
+    parser.add_argument("--centralized", default=True, type=bool, help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()
     ip = main(args)
