@@ -57,47 +57,88 @@ def define_agents(args):
     return human_policy, policies_to_train
 
 
-
-
 def define_training(human_policy, policies_to_train):
-    config = (
-        PPOConfig()
-        .api_stack( #reduce some warning.
-            enable_rl_module_and_learner=True,
-            enable_env_runner_and_connector_v2=True,
-        )
-        .environment("Overcooked")
-        .env_runners( # define how many envs to run in parallel and resources per env
-            num_envs_per_env_runner=1,
-            num_cpus_per_env_runner=1,
-            num_gpus_per_env_runner=0
-        )
-        .multi_agent(
-            policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
-            policy_mapping_fn=lambda aid, *a, **kw: aid,
-            policies_to_train=policies_to_train
+    gpuenabled = False
+    if gpuenabled:
+        config = (
+            PPOConfig()
+            .resources(num_gpus=1)
+            .api_stack( #reduce some warning.
+                enable_rl_module_and_learner=True,
+                enable_env_runner_and_connector_v2=True,
+            )
+            .environment("Overcooked")
+            .env_runners( # define how many envs to run in parallel and resources per env
+                num_env_runners=1 # number of runners
+                num_envs_per_env_runner=1, # number of envs per runner (RAM/VRAM capped)
+                num_cpus_per_env_runner=1, # number of cpus used per runner (aim 75% cores = num_env_runners * num_cpus_per_env_runner)
+                num_gpus_per_env_runner=0.5 # number of gpus used per env runner (aim 100% gpus (0.5*2=1 gpu) = num_env_runners * num_gpus_per_env_runner)
+            )
+            .multi_agent(
+                policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
+                policy_mapping_fn=lambda aid, *a, **kw: aid,
+                policies_to_train=policies_to_train
 
-        )
-        .rl_module( # define what kind of policy each agent is
-            rl_module_spec=MultiRLModuleSpec(
-                rl_module_specs={
-                    #"human": human_policy,
-                    "ai1": RLModuleSpec(),
-                    "ai2": RLModuleSpec(),
-                }
-            ),
-        )
-        .training( # these are hyper paramters for PPO
-            lr=1e-3,
-            lambda_=0.98,
-            gamma=0.99,
-            clip_param=0.05,
-            entropy_coeff=0.1,
-            vf_loss_coeff=0.1,
-            grad_clip=0.1,
-            num_epochs=10,
-            minibatch_size=64,
-        )
+            )
+            .rl_module( # define what kind of policy each agent is
+                rl_module_spec=MultiRLModuleSpec(
+                    rl_module_specs={
+                        #"human": human_policy,
+                        "ai1": RLModuleSpec(),
+                        "ai2": RLModuleSpec(),
+                    }
+                ),
+            )
+            .training( # these are hyper paramters for PPO
+                lr=1e-3,
+                lambda_=0.98,
+                gamma=0.99,
+                clip_param=0.05,
+                entropy_coeff=0.1,
+                vf_loss_coeff=0.1,
+                grad_clip=0.1,
+                num_epochs=10,
+                minibatch_size=64,
+            )
+    else:
+        config = (
+            PPOConfig()
+            .api_stack( #reduce some warning.
+                enable_rl_module_and_learner=True,
+                enable_env_runner_and_connector_v2=True,
+            )
+            .environment("Overcooked")
+            .env_runners( # define how many envs to run in parallel and resources per env
+                num_envs_per_env_runner=1,
+                num_cpus_per_env_runner=1,
+                num_gpus_per_env_runner=0
+            )
+            .multi_agent(
+                policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
+                policy_mapping_fn=lambda aid, *a, **kw: aid,
+                policies_to_train=policies_to_train
+
+            )
+            .rl_module( # define what kind of policy each agent is
+                rl_module_spec=MultiRLModuleSpec(
+                    rl_module_specs={
+                        #"human": human_policy,
+                        "ai1": RLModuleSpec(),
+                        "ai2": RLModuleSpec(),
+                    }
+                ),
+            )
+            .training( # these are hyper paramters for PPO
+                lr=1e-3,
+                lambda_=0.98,
+                gamma=0.99,
+                clip_param=0.05,
+                entropy_coeff=0.1,
+                vf_loss_coeff=0.1,
+                grad_clip=0.1,
+                num_epochs=10,
+                minibatch_size=64,
+            )
     )
     return config
 

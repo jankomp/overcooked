@@ -37,16 +37,16 @@ def define_env():
 
 
 def define_training():
-    gpu_enabled=True
+    gpu_enabled=False
     if gpu_enabled:
         config = (
             PPOConfig()
             .environment("Overcooked")
             .env_runners(
-                num_env_runners=4,
-                num_envs_per_env_runner=20,
-                num_cpus_per_env_runner=4,
-                num_gpus_per_env_runner=0.25,
+                num_env_runners=4,# number of runners
+                num_envs_per_env_runner=20,# number of envs per runner (RAM/VRAM capped)
+                num_cpus_per_env_runner=4,# number of cpus used per runner (aim 75% cores = num_env_runners * num_cpus_per_env_runner)
+                num_gpus_per_env_runner=0.25, # number of gpus used per env runner (aim 100% gpus (0.5*2=1 gpu) = num_env_runners * num_gpus_per_env_runner)
             )
             .training(  # these are hyperparameters for PPO
                 lr=1e-3,
