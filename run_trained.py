@@ -1,6 +1,6 @@
 import glob
 import time
-from environment.Overcooked import get_overcooked_multi_class
+from environment.Overcooked import Overcooked_multi
 from ray import tune
 from ray.rllib.algorithms import Algorithm
 from ray.rllib.core.rl_module.rl_module import RLModule
@@ -20,7 +20,7 @@ import os
 from ray.rllib.utils.numpy import convert_to_numpy, softmax
 import numpy as np
 
-def define_environment(args):
+def define_environment(centralized):
     reward_config = {
         "metatask failed": 0,
         "goodtask finished": 5,
@@ -30,17 +30,18 @@ def define_environment(args):
         "step penalty": -1.,
     }
     env_params = {
-        "centralized": args.centralized,
+        "centralized": centralized,
         "grid_dim": [5, 5],
         "task": "tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
         "mode": "vector",
         "debug": False,
-        "agents": ['ai1', 'ai2'],
+        "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
+        "n_players": 3,
     }
 
-    env = get_overcooked_multi_class(env_params)
+    env = Overcooked_multi(**env_params)
     return env
 
 
@@ -74,15 +75,24 @@ def load_modules(args):
     best_checkpoint = best_result.checkpoint
 
     if args.centralized:
-        rl_module = RLModule.from_checkpoint(os.path.join(
+        ai_module = RLModule.from_checkpoint(os.path.join(
             best_checkpoint.path,
             COMPONENT_LEARNER_GROUP,
             COMPONENT_LEARNER,
             COMPONENT_RL_MODULE,
-            DEFAULT_POLICY_ID
+            'ai'
             )
         )
-        return rl_module
+        human_module = RLModule.from_checkpoint(os.path.join(
+            best_checkpoint.path,
+            COMPONENT_LEARNER_GROUP,
+            COMPONENT_LEARNER,
+            COMPONENT_RL_MODULE,
+            'human'
+            )
+        )
+
+        return ai_module, human_module
     else:
         ai1_module = RLModule.from_checkpoint(os.path.join(
             best_checkpoint.path,
@@ -98,41 +108,51 @@ def load_modules(args):
             COMPONENT_RL_MODULE,
             'ai2',
         ))
-        return ai1_module, ai2_module
+        human_module = RLModule.from_checkpoint(os.path.join(
+            best_checkpoint.path,
+            COMPONENT_LEARNER_GROUP,
+            COMPONENT_LEARNER,
+            COMPONENT_RL_MODULE,
+            'human'
+            )
+        )
+        return ai1_module, ai2_module, human_module
 
 
 def main(args):
-    env = define_environment(args)
+    env = define_environment(args.centralized)
 
     if args.centralized:
-        ai_module = load_modules(args)
+        ai_module, human_module = load_modules(args)
     else:
-        ai1_module, ai2_module = load_modules(args)
+        ai1_module, ai2_module, human_module = load_modules(args)
     env.game.on_init()
     obs, info = env.reset()
     env.render()
 
-    action_space_shape = np.array([env.action_space.shape[0], env.action_space[0].n]) if args.centralized else None
+    if args.centralized:
+        ai_action_space_shape = np.array([env.action_spaces["ai"].shape[0], env.action_spaces["ai"][0].n])
 
     while True:
         if args.centralized:
-            action = sample_action(ai_module, torch.from_numpy(obs).unsqueeze(0).float(), action_space_shape)
+            ai_action = sample_action(ai_module, torch.from_numpy(obs['ai']).unsqueeze(0).float(), ai_action_space_shape)
+            human_action = sample_action(human_module, torch.from_numpy(obs['human']).unsqueeze(0).float(), None)
+            action = {'ai': ai_action,
+                    'human': human_action}
         else:
-            ai1_action = sample_action(ai1_module, torch.from_numpy(obs['ai1']).unsqueeze(0).float(), action_space_shape)
-            ai2_action = sample_action(ai1_module, torch.from_numpy(obs['ai2']).unsqueeze(0).float(), action_space_shape)
+            ai1_action = sample_action(ai1_module, torch.from_numpy(obs['ai1']).unsqueeze(0).float(), None)
+            ai2_action = sample_action(ai2_module, torch.from_numpy(obs['ai2']).unsqueeze(0).float(), None)
+            human_action = sample_action(human_module, torch.from_numpy(obs['human']).unsqueeze(0).float(), None)
             action = {'ai1': ai1_action,
-                    'ai2': ai2_action}
+                    'ai2': ai2_action,
+                    'human': human_action}
 
         obs, rewards, terminateds, _, _ = env.step(action)
         env.render()
         time.sleep(0.1)
 
-        if args.centralized:
-            if terminateds:
-                break
-        else:
-            if terminateds['__all__']:
-                break
+        if terminateds['__all__']:
+            break
 
 if __name__ == "__main__":
     import argparse
@@ -144,4 +164,5 @@ if __name__ == "__main__":
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()
+
     main(args)

@@ -1,7 +1,7 @@
 import time
 import ray
 from ray.train import RunConfig, CheckpointConfig
-from environment.Overcooked import get_overcooked_multi_class
+from environment.Overcooked import Overcooked_multi
 from ray.tune.registry import register_env
 from ray.rllib.core.rl_module.multi_rl_module import MultiRLModuleSpec
 from ray.rllib.core.rl_module.rl_module import RLModuleSpec
@@ -28,12 +28,13 @@ def define_env(centralized):
         "map_type": "A",
         "mode": "vector",
         "debug": False,
-        "agents": ['ai1', 'ai2'],
+        "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
+        "n_players": 3,
     }
 
     register_env(
         "Overcooked",
-        lambda _: get_overcooked_multi_class(env_params),
+        lambda _: Overcooked_multi(**env_params),
     )
 
 def define_agents(args):
@@ -45,21 +46,20 @@ def define_agents(args):
     '''
     if args.rl_module == 'stationary':
         human_policy = RLModuleSpec(module_class=AlwaysStationaryRLM)
-        policies_to_train = ['ai1', 'ai2']
     elif args.rl_module == 'random':
         human_policy = RLModuleSpec(module_class=RandomRLM)
-        policies_to_train = ['ai1', 'ai2']
     elif args.rl_module == 'learned':
         human_policy = RLModuleSpec()
-        policies_to_train = ['ai1', 'ai2,' 'human']
     else:
         raise NotImplementedError(f"{args.rl_module} not a valid human agent")
+    
+    policies_to_train = ['ai'] if args.centralized else ['ai1', 'ai2']
     return human_policy, policies_to_train
 
 
 
 
-def define_training(centralized, policies_to_train):
+def define_training(centralized, human_policy, policies_to_train):
     config = (
         PPOConfig()
         .api_stack( #reduce some warning.
@@ -85,11 +85,10 @@ def define_training(centralized, policies_to_train):
         )
     )
 
-    if not centralized:
-        config = (
-            config
+    if centralized:
+        config = (config
             .multi_agent(
-                policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
+                policies={"ai", "human"}, # one critic controlling all the ai players
                 policy_mapping_fn=lambda aid, *a, **kw: aid,
                 policies_to_train=policies_to_train
 
@@ -97,13 +96,31 @@ def define_training(centralized, policies_to_train):
             .rl_module( # define what kind of policy each agent is
                 rl_module_spec=MultiRLModuleSpec(
                     rl_module_specs={
-                        #"human": human_policy,
-                        "ai1": RLModuleSpec(),
-                        "ai2": RLModuleSpec(),
+                        "ai": RLModuleSpec(), # TODO: increase the network size
+                        "human": human_policy,
                     }
                 ),
             )
         )
+    else:
+        config = (config
+            .multi_agent(
+                policies={"ai1", "ai2", "human"},
+                policy_mapping_fn=lambda aid, *a, **kw: aid,
+                policies_to_train=policies_to_train
+
+            )
+            .rl_module( # define what kind of policy each agent is
+                rl_module_spec=MultiRLModuleSpec(
+                    rl_module_specs={
+                        "ai1": RLModuleSpec(),
+                        "ai2": RLModuleSpec(),
+                        "human": human_policy,
+                    }
+                ),
+            )
+        )
+
     return config
 
 
@@ -126,8 +143,8 @@ def train(args, config):
 
 def main(args):
     define_env(args.centralized)
-    _, policies_to_train = define_agents(args)
-    config = define_training(args.centralized, policies_to_train)
+    human_policy, policies_to_train = define_agents(args)
+    config = define_training(args.centralized, human_policy, policies_to_train)
     train(args, config)
 
 if __name__ == "__main__":
@@ -140,4 +157,5 @@ if __name__ == "__main__":
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()
+
     ip = main(args)
