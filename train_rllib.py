@@ -59,7 +59,7 @@ def define_agents(args):
 
 
 
-def define_training():
+def define_training(centralized, policies_to_train):
     config = (
         PPOConfig()
         .api_stack( #reduce some warning.
@@ -72,21 +72,6 @@ def define_training():
             num_cpus_per_env_runner=1,
             num_gpus_per_env_runner=0
         )
-        #.multi_agent(
-        #    policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
-        #    policy_mapping_fn=lambda aid, *a, **kw: aid,
-        #    policies_to_train=policies_to_train
-#
-        #)
-        #.rl_module( # define what kind of policy each agent is
-        #    rl_module_spec=MultiRLModuleSpec(
-        #        rl_module_specs={
-        #            #"human": human_policy,
-        #            "ai1": RLModuleSpec(),
-        #            "ai2": RLModuleSpec(),
-        #        }
-        #    ),
-        #)
         .training( # these are hyper paramters for PPO
             lr=1e-3,
             lambda_=0.98,
@@ -99,6 +84,26 @@ def define_training():
             minibatch_size=64,
         )
     )
+
+    if not centralized:
+        config = (
+            config
+            .multi_agent(
+                policies={"ai1", "ai2"}, # old: policies={"ai1", "ai2", "human"},
+                policy_mapping_fn=lambda aid, *a, **kw: aid,
+                policies_to_train=policies_to_train
+
+            )
+            .rl_module( # define what kind of policy each agent is
+                rl_module_spec=MultiRLModuleSpec(
+                    rl_module_specs={
+                        #"human": human_policy,
+                        "ai1": RLModuleSpec(),
+                        "ai2": RLModuleSpec(),
+                    }
+                ),
+            )
+        )
     return config
 
 
@@ -121,8 +126,8 @@ def train(args, config):
 
 def main(args):
     define_env(args.centralized)
-    #human_policy, policies_to_train = define_agents(args)
-    config = define_training()
+    _, policies_to_train = define_agents(args)
+    config = define_training(args.centralized, policies_to_train)
     train(args, config)
 
 if __name__ == "__main__":
@@ -132,7 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned")
-    parser.add_argument("--centralized", default=True, type=bool, help="True for centralized training, False for decentralized training")
+    parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()
     ip = main(args)
