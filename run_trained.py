@@ -31,7 +31,7 @@ def define_environment(centralized):
     }
     env_params = {
         "centralized": centralized,
-        "grid_dim": [5, 5],
+        "grid_dim": [7, 7],
         "task": "tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
@@ -39,6 +39,7 @@ def define_environment(centralized):
         "debug": False,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
+        "max_episode_length": 100,
     }
 
     env = Overcooked_multi(**env_params)

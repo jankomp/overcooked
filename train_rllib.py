@@ -22,7 +22,7 @@ def define_env(centralized):
     }
     env_params = {
         "centralized": centralized,
-        "grid_dim": [5, 5],
+        "grid_dim": [7, 7],
         "task": "tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
@@ -30,6 +30,7 @@ def define_env(centralized):
         "debug": False,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
+        "max_episode_length": 100,
     }
 
     register_env(
@@ -135,7 +136,7 @@ def train(args, config):
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
-            stop={"training_iteration": 200}, # stop after 200 iterations (fairly arbitrary, and many more options if you look at the docs)
+            stop={"training_iteration": 500}, # stop after 200 iterations (fairly arbitrary, and many more options if you look at the docs)
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
     )

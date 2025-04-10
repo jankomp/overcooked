@@ -15,12 +15,13 @@ TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato sala
 
 class Overcooked_multi(MultiAgentEnv):
 
-    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=False, agents=["ai", "human"], n_players=2):
+    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=False, agents=["ai", "human"], n_players=2, max_episode_length=80):
         super().__init__()
         self.step_count = 0
         self.centralized = centralized
         self.agents = agents
         self.n_agents = n_players
+        self.max_episode_length = max_episode_length
 
         self.players = [f"ai{i}" for i in range(n_players - 1)] + ["human"]
         self.obs_radius = 0 # full observability
@@ -1012,7 +1013,7 @@ class Overcooked_multi(MultiAgentEnv):
                 if not agent.moved:
                     all_action_done = False
 
-        terminateds = {"__all__": done or self.step_count >= 80}
+        terminateds = {"__all__": done or self.step_count >= self.max_episode_length}
         rewards = {agent: self.reward for agent in self.agents}
         infos = {agent: info for agent in self.agents}
 
