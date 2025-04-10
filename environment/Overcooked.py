@@ -10,7 +10,7 @@ from collections import Counter
 DIRECTION = [(0, 1), (1, 0), (0, -1), (-1, 0)]
 ITEMNAME = ["space", "counter", "agent", "tomato", "lettuce", "plate", "knife", "delivery", "onion"]
 ITEMIDX = {"space": 0, "counter": 1, "agent": 2, "tomato": 3, "lettuce": 4, "plate": 5, "knife": 6, "delivery": 7, "onion": 8}
-AGENTCOLOR = ["blue", "robot", "green", "yellow"]
+AGENTCOLOR = ["robot-black", "robot-blue", "robot-green", "robot-orange", "robot-pink", "robot-red", "robot-yellow", "yellow"]
 TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato salad", "onion-tomato salad", "lettuce-onion salad", "lettuce-onion-tomato salad"]
 
 class Overcooked_multi(MultiAgentEnv):
@@ -26,7 +26,7 @@ class Overcooked_multi(MultiAgentEnv):
         self.obs_radius = 0 # full observability
         self.xlen, self.ylen = grid_dim
 
-        self.task = task #TODO: change to task index and random sampling in reset.
+        self.task = task
         self.rewardList = rewardList
         self.mapType = map_type
         self.debug = debug
@@ -382,7 +382,7 @@ class Overcooked_multi(MultiAgentEnv):
             for y in range(self.ylen):
                 item_type = ITEMNAME[self.map[x][y]]
                 if item_type == "agent":
-                    self.itemDic[item_type].append(Agent(x, y, color=AGENTCOLOR[agent_idx]))
+                    self.itemDic[item_type].append(Agent(agent_idx, x, y, color=AGENTCOLOR[agent_idx - self.n_agents]))
                     agent_idx += 1
                 elif item_type == "knife":
                     new_knife = Knife(x, y)
@@ -491,7 +491,7 @@ class Overcooked_multi(MultiAgentEnv):
         if self.obs_radius > 0:
             if self.mode == "vector":
                 if self.centralized:
-                	#TODO: centralized means 1 network for all ais but another critic for the 1 human
+                	#TODO: take obs radius into account
                     return {"ai": np.array([agent_obs for agent_obs in vec_obs[:-1]]), "human": np.array([vec_obs[-1]]).squeeze()}
                 else:                    
                     return {agent: np.asarray(vec_obs[i], dtype=np.float64) for i, agent in enumerate(self.agents)}
@@ -501,7 +501,6 @@ class Overcooked_multi(MultiAgentEnv):
             # If observation radius is 0, agents have full observability
             if self.mode == "vector":
                 if self.centralized:
-                	#TODO: centralized means 1 network for all ais but another critic for the 1 human
                     obs = {"ai": np.array(vec_obs[:-1]).flatten(), "human": np.array(vec_obs[-1])}
                     return obs
                 else:                    
@@ -738,7 +737,7 @@ class Overcooked_multi(MultiAgentEnv):
         obs : list
             observation for each agent.
         """
-
+        #TODO: change to task index and randomize locations of items
         self.map = copy.deepcopy(self.initMap)
         self._createItems()
         self.step_count = 0
@@ -815,7 +814,7 @@ class Overcooked_multi(MultiAgentEnv):
                         target_player = self._findItem(target_x, target_y, target_name)
                         if not target_player.moved:
                             agent.moved = False
-                            target_player_action = action[AGENTCOLOR.index(target_player.color)]
+                            target_player_action = action[target_player.idx]
                             if target_player_action < 4:
                                 new_target_player_x = target_player.x + DIRECTION[target_player_action][0]
                                 new_target_player_y = target_player.y + DIRECTION[target_player_action][1]

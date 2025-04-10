@@ -151,8 +151,9 @@ class Plate(MovableItem):
 
 
 class Agent(MovableItem):
-    def __init__(self, pos_x, pos_y, holding = None, color = None):
+    def __init__(self, idx, pos_x, pos_y, holding = None, color = None):
         super().__init__(pos_x, pos_y)
+        self.idx = idx
         self.holding = holding
         self.color = color
         self.moved = False
