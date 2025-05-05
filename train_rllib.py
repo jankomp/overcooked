@@ -137,7 +137,7 @@ def train(args, config):
     ray.init()
     current_dir = os.getcwd()
     storage_path = os.path.join(current_dir, args.save_dir) # save the results in the runs folder
-    experiment_name = f"{"centralized" if args.centralized else "decentralized"}_{args.name}_{args.rl_module}_{int(time.time() * 1000)}" # add a timestamp to the name to make it unique
+    experiment_name = f"{'centralized' if args.centralized else 'decentralized'}_{args.name}_{args.rl_module}_{int(time.time() * 1000)}" # add a timestamp to the name to make it unique
     tuner = tune.Tuner(
         "PPO",
         param_space=config,

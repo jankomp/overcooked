@@ -112,3 +112,4 @@ experiments/
 runs/
 wandb/
 .idea/
+nohup.out
