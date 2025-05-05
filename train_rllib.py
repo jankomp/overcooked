@@ -4,6 +4,7 @@ from ray.train import RunConfig, CheckpointConfig
 from environment.Overcooked import Overcooked_multi
 from ray.tune.registry import register_env
 from ray.rllib.core.rl_module.multi_rl_module import MultiRLModuleSpec
+from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
 from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
@@ -14,11 +15,10 @@ import os
 def define_env(centralized):
     reward_config = {
         "metatask failed": 0,
-        "goodtask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
-        "wrong delivery": -50,
-        "step penalty": -1.,
+        "wrong delivery": -5,
+        "step penalty": -0.1,
     }
     env_params = {
         "centralized": centralized,
@@ -74,6 +74,8 @@ def define_training(centralized, human_policy, policies_to_train):
             num_gpus_per_env_runner=0
         )
         .training( # these are hyper paramters for PPO
+            use_critic=True,
+            use_gae=True,
             lr=1e-3,
             lambda_=0.98,
             gamma=0.99,
@@ -86,6 +88,12 @@ def define_training(centralized, human_policy, policies_to_train):
         )
     )
 
+    model_config = DefaultModelConfig()
+    model_config.fcnet_hiddens = [256, 256, 256] # one more hidden layer than default
+    model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
+    rl_module_spec = RLModuleSpec(model_config=model_config)
+
+
     if centralized:
         config = (config
             .multi_agent(
@@ -97,7 +105,7 @@ def define_training(centralized, human_policy, policies_to_train):
             .rl_module( # define what kind of policy each agent is
                 rl_module_spec=MultiRLModuleSpec(
                     rl_module_specs={
-                        "ai": RLModuleSpec(), # TODO: increase the network size
+                        "ai": rl_module_spec,
                         "human": human_policy,
                     }
                 ),
@@ -114,8 +122,8 @@ def define_training(centralized, human_policy, policies_to_train):
             .rl_module( # define what kind of policy each agent is
                 rl_module_spec=MultiRLModuleSpec(
                     rl_module_specs={
-                        "ai1": RLModuleSpec(),
-                        "ai2": RLModuleSpec(),
+                        "ai1": rl_module_spec,
+                        "ai2": rl_module_spec,
                         "human": human_policy,
                     }
                 ),
@@ -136,7 +144,7 @@ def train(args, config):
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
-            stop={"training_iteration": 500}, # stop after 200 iterations (fairly arbitrary, and many more options if you look at the docs)
+            stop={"training_iteration": 1000},
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
     )
