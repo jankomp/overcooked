@@ -40,8 +40,7 @@ class Overcooked_multi(MultiAgentEnv):
 
         self.oneHotTask = [1 if t in self.task else 0 for t in TASKLIST]
 
-        counter = Counter(self.task)
-        self.taskCompletionStatus = [counter[element] if element in counter else 0 for element in TASKLIST]
+        self.taskCompletionStatus = [1 if element in [self.task] else 0 for element in TASKLIST]
 
         self._createItems()
         n_ais = n_players - 1 # there should always be 1 human agent and the rest ais
@@ -744,282 +743,278 @@ class Overcooked_multi(MultiAgentEnv):
         self.step_count = 0
 
         # Reset task completion status
-        counter = Counter(self.task)
-        self.taskCompletionStatus = [counter[element] if element in counter else 0 for element in TASKLIST]
+        self.taskCompletionStatus = [1 if element in [self.task] else 0 for element in TASKLIST]
 
         self._initObs()
 
         return self._get_obs(), {}
     
     def step(self, action):
-
-        """
-        Parameters
-        ----------
-        action: list
-            action for each agent
-
-        Returns
-        -------
-        obs : list
-            observation for each agent.
-        rewards : list
-        terminate : list
-        info : dictionary
-        """
         if self.centralized:
-            # split the ai players actions
-            player_actions = {player: action["ai"][idx] for idx, player in enumerate(self.players[:-1])}
-            player_actions["human"] = action["human"]
-            action = player_actions
+            action = self._split_centralized_actions(action)
 
-        
-        action = [action[key] for key in action]
-
-
+        action_list = [action[key] for key in action]
         self.step_count += 1
-
-        # Executing any action incurs a step penalty.
-        # If the step count reaches 24, mark done as True and reset the counter.
         self.reward = self.rewardList["step penalty"]
         done = False
 
-        info = {}
-        info['cur_mac'] = action
-        info['mac_done'] = [True] * self.n_agents
-        info['collision'] = []
-
-        all_action_done = False
-
-        for agent in self.agent:
-
-            agent.moved = False
+        self._reset_agent_movement_flags()
+        info = self._initialize_info(action_list)
 
         if self.debug:
-            print("in overcooked primitive actions:", action)
-            pass
+            print("in overcooked primitive actions:", action_list)
 
-        while not all_action_done:
+        while not self._all_agents_moved():
             for idx, agent in enumerate(self.agent):
-                player_action = action[idx]
                 if agent.moved:
                     continue
-                agent.moved = True
+                self._execute_agent_action(agent, action_list, idx)
 
-                if player_action < 4:
-                    target_x = agent.x + DIRECTION[player_action][0]
-                    target_y = agent.y + DIRECTION[player_action][1]
-                    target_name = ITEMNAME[self.map[target_x][target_y]]
-
-                    if target_name == "agent":
-                        target_player = self._findItem(target_x, target_y, target_name)
-                        if not target_player.moved:
-                            agent.moved = False
-                            target_player_action = action[target_player.idx]
-                            if target_player_action < 4:
-                                new_target_player_x = target_player.x + DIRECTION[target_player_action][0]
-                                new_target_player_y = target_player.y + DIRECTION[target_player_action][1]
-                                if new_target_player_x == agent.x and new_target_player_y == agent.y:
-                                    target_player.move(new_target_player_x, new_target_player_y)
-                                    agent.move(target_x, target_y)
-                                    agent.moved = True
-                                    target_player.moved = True
-
-                    # If the target is space, move the agent to the target position
-                    elif  target_name == "space":
-                        self.map[agent.x][agent.y] = ITEMIDX["space"]
-                        agent.move(target_x, target_y)
-                        self.map[target_x][target_y] = ITEMIDX["agent"]
-
-                    # pickup and chop 
-                    # If the agent doesn't have anything in hand
-                    elif not agent.holding:
-                        # If the target is a movable item, pick it up
-                        if target_name in ["tomato", "lettuce", "plate", "onion"]:
-                            item = self._findItem(target_x, target_y, target_name)
-                            agent.pickup(item)
-                            self.map[target_x][target_y] = ITEMIDX["counter"]
-
-                        elif target_name == "knife":
-                            knife = self._findItem(target_x, target_y, target_name)
-                            # If the knife is holding a plate, pick it up
-                            if isinstance(knife.holding, Plate):
-                                item = knife.holding
-                                knife.release()
-                                agent.pickup(item)
-                            # If the knife is holding food
-                            elif isinstance(knife.holding, Food):
-                                # If the food is chopped, pick it up
-                                if knife.holding.chopped:
-                                    item = knife.holding
-                                    knife.release()
-                                    agent.pickup(item)
-                                # If the food is not chopped, chop it once
-                                else:
-                                    knife.holding.chop()
-                                    self.reward += self.rewardList["subtask finished"]
-                                    # If the food is chopped after chopping, check if it is part of the current task
-                                    if knife.holding.chopped:
-                                        for task in self.task:
-                                            if knife.holding.rawName in task:
-                                                # Reward for completing a mini task
-                                                self.reward += self.rewardList["subtask finished"]
-                    # put down
-                    # If the agent is currently holding something
-                    elif agent.holding:
-                        # If the target is a counter, the agent will put down the item
-                        if target_name == "counter":
-                            if agent.holding.rawName in ["tomato", "lettuce", "onion", "plate"]:
-                                # Change the counter to hold the item the agent was holding
-                                self.map[target_x][target_y] = ITEMIDX[agent.holding.rawName]
-                            # Reset the agent to not holding anything
-                            agent.putdown(target_x, target_y)
-                            self.reward += self.rewardList["metatask failed"]
-                        # If the target is a plate
-                        elif target_name == "plate":
-                            # If the agent is holding food, check if it is chopped
-                            if isinstance(agent.holding, Food):
-                                if agent.holding.chopped:
-                                    # Reward for placing chopped food on a plate
-                                    self.reward += self.rewardList["subtask finished"]
-                                    plate = self._findItem(target_x, target_y, target_name)
-                                    item = agent.holding
-                                    # Put down the item and reset the agent
-                                    agent.putdown(target_x, target_y)
-                                    # Place the food on the plate
-                                    plate.contain(item)
-                            else:
-                                self.reward += self.rewardList["metatask failed"]
-                        # If the target is a knife
-                        elif target_name == "knife":
-                            knife = self._findItem(target_x, target_y, target_name)
-                            # If the knife is empty, place the item on the knife
-                            if not knife.holding:
-                                item = agent.holding
-                                agent.putdown(target_x, target_y)
-                                knife.hold(item)
-                                if isinstance(item, Food):
-                                    if item.chopped:
-                                        # Penalty for placing chopped food back on the knife
-                                        self.reward += self.rewardList["metatask failed"]
-                                    else:
-                                        # Reward for placing unchopped food on the knife
-                                        self.reward += self.rewardList["subtask finished"]
-                                else:
-                                    self.reward += self.rewardList["metatask failed"]
-                            # If the knife is holding food and the agent is holding a plate, place the food on the plate
-                            elif isinstance(knife.holding, Food) and isinstance(agent.holding, Plate):
-                                item = knife.holding
-                                if item.chopped:
-                                    self.reward += self.rewardList["subtask finished"]
-                                    knife.release()
-                                    agent.holding.contain(item)
-                                else:
-                                    # Penalty for placing unchopped food on a plate
-                                    self.reward += self.rewardList["metatask failed"]
-                            elif isinstance(knife.holding, Food) and not isinstance(agent.holding, Plate):
-                                # Penalty for holding food while the knife is holding food
-                                self.reward += self.rewardList["metatask failed"]
-                            # If the knife is holding a plate and the agent is holding food, place the food on the plate
-                            elif isinstance(knife.holding, Plate) and isinstance(agent.holding, Food):
-                                plate_item = knife.holding
-                                food_item = agent.holding
-                                if food_item.chopped:
-                                    self.reward += self.rewardList["subtask finished"]
-                                    knife.release()
-                                    agent.pickup(plate_item)
-                                    agent.holding.contain(food_item)
-                                else:
-                                    # Penalty for placing unchopped food on a plate
-                                    self.reward += self.rewardList["metatask failed"]
-                            elif isinstance(knife.holding, Plate) and isinstance(agent.holding, Plate):
-                                # Penalty for holding a plate while the knife is holding a plate
-                                self.reward += self.rewardList["metatask failed"]
-                        # If the target is a delivery point
-                        elif target_name == "delivery":
-                            # If the agent is holding a plate, check if it contains food
-                            if isinstance(agent.holding, Plate):
-                                if agent.holding.containing:
-                                    dishName = ""
-                                    foodList = [Lettuce, Onion, Tomato]
-                                    foodInPlate = [-1] * len(foodList)
-                                    for f in range(len(agent.holding.containing)):
-                                        for i in range(len(foodList)):
-                                            if isinstance(agent.holding.containing[f], foodList[i]):
-                                                foodInPlate[i] = f
-                                    for i in range(len(foodList)):
-                                        if foodInPlate[i] > -1:
-                                            dishName += agent.holding.containing[foodInPlate[i]].rawName + "-"
-                                    dishName = dishName[:-1] + " salad"
-                                    if dishName in self.task:
-                                        item = agent.holding
-                                        agent.putdown(target_x, target_y)
-                                        food = item.containing
-                                        item.release()
-                                        item.refresh()
-                                        self.map[item.x][item.y] = ITEMIDX[item.name]
-                                        for f in food:
-                                            f.refresh()
-                                            self.map[f.x][f.y] = ITEMIDX[f.rawName]
-                                        index = TASKLIST.index(dishName)
-                                        if self.taskCompletionStatus[index] > 0:
-                                            self.taskCompletionStatus[index] -= 1
-                                            self.reward += self.rewardList["correct delivery"]
-                                        else:
-                                            self.reward += self.rewardList["wrong delivery"]
-                                        if all(value == 0 for value in self.taskCompletionStatus):
-                                            self.reward += self.rewardList["correct delivery"]
-                                            done = True
-                                    else:
-                                        self.reward += self.rewardList["wrong delivery"]
-                                        item = agent.holding
-                                        agent.putdown(target_x, target_y)
-                                        food = item.containing
-                                        item.release()
-                                        item.refresh()
-                                        self.map[item.x][item.y] = ITEMIDX[item.name]
-                                        for f in food:
-                                            f.refresh()
-                                            self.map[f.x][f.y] = ITEMIDX[f.rawName]
-                                else:
-                                    self.reward += self.rewardList["wrong delivery"]
-                                    plate = agent.holding
-                                    agent.putdown(target_x, target_y)
-                                    plate.refresh()
-                                    self.map[plate.x][plate.y] = ITEMIDX[plate.name]
-                            else:
-                                self.reward += self.rewardList["wrong delivery"]
-                                food = agent.holding
-                                agent.putdown(target_x, target_y)
-                                food.refresh()
-                                self.map[food.x][food.y] = ITEMIDX[food.rawName]
-                        # If the target is food, the agent can only put down the item if it is holding a plate and the food is chopped
-                        elif target_name in ["tomato", "lettuce", "onion"]:
-                            item = self._findItem(target_x, target_y, target_name)
-                            if item.chopped and isinstance(agent.holding, Plate):
-                                self.reward += self.rewardList["subtask finished"]
-                                agent.holding.contain(item)
-                                self.map[target_x][target_y] = ITEMIDX["counter"]
-                            elif not item.chopped and isinstance(agent.holding, Plate):
-                                self.reward += self.rewardList["metatask failed"]
-                            elif isinstance(agent.holding, Food):
-                                self.reward += self.rewardList["metatask failed"]
-
-            # End of the for loop for all agents' actions
-            all_action_done = True
-
-            # Check if any agent has not moved
-            for agent in self.agent:
-                if not agent.moved:
-                    all_action_done = False
-
+        done = done or self._check_task_completion()
         terminateds = {"__all__": done or self.step_count >= self.max_episode_length}
         rewards = {agent: self.reward for agent in self.agents}
         infos = {agent: info for agent in self.agents}
+        truncated = False
 
-        truncated =  False
-        
+        if self.debug:
+            print("rewards:", rewards)
+
         return self._get_obs(), rewards, terminateds, {'__all__': truncated}, infos
+    
+    def _split_centralized_actions(self, action):
+        player_actions = {player: action["ai"][idx] for idx, player in enumerate(self.players[:-1])}
+        player_actions["human"] = action["human"]
+        return player_actions
+    
+    def _execute_agent_action(self, agent, action_list, idx):
+        agent.moved = True
+
+        if action_list[idx] < 4:
+            self._attempt_move(agent, action_list, idx)
+        else:
+            for x, y in DIRECTION:
+                self._handle_interaction(agent, agent.x + x, agent.y + y)
+
+    def _attempt_move(self, agent, action_list, idx):
+        direction = action_list[idx]
+        target_x = agent.x + DIRECTION[direction][0]
+        target_y = agent.y + DIRECTION[direction][1]
+        target_name = ITEMNAME[self.map[target_x][target_y]]
+
+        if target_name == "space":
+            self._move_agent(agent, target_x, target_y)
+        elif target_name == "agent":
+            self._handle_agent_collision(agent, action_list, target_x, target_y)
+        else:
+            self._handle_interaction(agent, target_x, target_y)
+
+
+    def _reset_agent_movement_flags(self):
+        for agent in self.agent:
+            agent.moved = False
+
+    def _initialize_info(self, action):
+        return {
+            'cur_mac': action,
+            'mac_done': [True] * self.n_agents,
+            'collision': []
+        }
+
+    def _all_agents_moved(self):
+        return all(agent.moved for agent in self.agent)
+    
+    def _check_task_completion(self):
+        if self.debug:
+            print("task completion status:", self.taskCompletionStatus)
+        return all(value == 0 for value in self.taskCompletionStatus)
+
+
+    def _move_agent(self, agent, tx, ty):
+        self.map[agent.x][agent.y] = ITEMIDX["space"]
+        agent.move(tx, ty)
+        self.map[tx][ty] = ITEMIDX["agent"]
+
+    def _handle_agent_collision(self, agent, action_list, tx, ty):
+        target_player = self._findItem(tx, ty, 'agent')
+        if not target_player.moved:
+            agent.moved = False
+            target_player_action = action_list[target_player.idx]
+            if target_player_action < 4:
+                new_target_player_x = target_player.x + DIRECTION[target_player_action][0]
+                new_target_player_y = target_player.y + DIRECTION[target_player_action][1]
+                if new_target_player_x == agent.x and new_target_player_y == agent.y:
+                    target_player.move(new_target_player_x, new_target_player_y)
+                    agent.move(tx, ty)
+                    agent.moved = True
+                    target_player.moved = True
+
+    def _handle_interaction(self, agent, tx, ty):
+        target_name = ITEMNAME[self.map[tx][ty]]
+
+        if not agent.holding:
+            self._try_pickup(agent, tx, ty, target_name)
+        else:
+            self._try_putdown(agent, tx, ty, target_name)
+
+    def _try_pickup(self, agent, tx, ty, target_name):
+        if target_name in ["tomato", "lettuce", "plate", "onion"]:
+            item = self._findItem(tx, ty, target_name)
+            agent.pickup(item)
+            self.map[tx][ty] = ITEMIDX["counter"]
+
+        elif target_name == "knife":
+            knife = self._findItem(tx, ty, target_name)
+            if isinstance(knife.holding, Plate):
+                item = knife.holding
+                knife.release()
+                agent.pickup(item)
+            elif isinstance(knife.holding, Food):
+                if knife.holding.chopped:
+                    item = knife.holding
+                    knife.release()
+                    agent.pickup(item)
+                else:
+                    knife.holding.chop()
+                    self.reward += self.rewardList["subtask finished"]
+                    if knife.holding.chopped:
+                        if any(knife.holding.rawName in task for task in self.task):
+                            self.reward += self.rewardList["subtask finished"]
+
+    def _try_putdown(self, agent, tx, ty, target_name):
+        item = agent.holding
+
+        if target_name == "counter":
+            if item.rawName in ["tomato", "lettuce", "onion", "plate"]:
+                self.map[tx][ty] = ITEMIDX[item.rawName]
+            agent.putdown(tx, ty)
+            self.reward += self.rewardList["metatask failed"]
+
+        elif target_name == "plate":
+            if isinstance(item, Food) and item.chopped:
+                plate = self._findItem(tx, ty, target_name)
+                agent.putdown(tx, ty)
+                plate.contain(item)
+                self.reward += self.rewardList["subtask finished"]
+            else:
+                self.reward += self.rewardList["metatask failed"]
+
+        elif target_name == "knife":
+            self._handle_putdown_on_knife(agent, tx, ty, target_name)
+
+        elif target_name == "delivery":
+            self._handle_delivery(agent, tx, ty)
+
+        elif target_name in ["tomato", "lettuce", "onion"]:
+            food_item = self._findItem(tx, ty, target_name)
+            if food_item.chopped and isinstance(item, Plate):
+                item.contain(food_item)
+                self.map[tx][ty] = ITEMIDX["counter"]
+                self.reward += self.rewardList["subtask finished"]
+            else:
+                self.reward += self.rewardList["metatask failed"]
+
+    def _handle_putdown_on_knife(self, agent, tx, ty, target_name):
+        knife = self._findItem(tx, ty, target_name)
+        # If the knife is empty, place the item on the knife
+        if not knife.holding:
+            item = agent.holding
+            agent.putdown(tx, ty)
+            knife.hold(item)
+            if isinstance(item, Food):
+                if item.chopped:
+                    # Penalty for placing chopped food back on the knife
+                    self.reward += self.rewardList["metatask failed"]
+                else:
+                    # Reward for placing unchopped food on the knife
+                    self.reward += self.rewardList["subtask finished"]
+            else:
+                self.reward += self.rewardList["metatask failed"]
+        # If the knife is holding food and the agent is holding a plate, place the food on the plate
+        elif isinstance(knife.holding, Food) and isinstance(agent.holding, Plate):
+            item = knife.holding
+            if item.chopped:
+                self.reward += self.rewardList["subtask finished"]
+                knife.release()
+                agent.holding.contain(item)
+            else:
+                # Penalty for placing unchopped food on a plate
+                self.reward += self.rewardList["metatask failed"]
+        elif isinstance(knife.holding, Food) and not isinstance(agent.holding, Plate):
+            # Penalty for holding food while the knife is holding food
+            self.reward += self.rewardList["metatask failed"]
+        # If the knife is holding a plate and the agent is holding food, place the food on the plate
+        elif isinstance(knife.holding, Plate) and isinstance(agent.holding, Food):
+            plate_item = knife.holding
+            food_item = agent.holding
+            if food_item.chopped:
+                self.reward += self.rewardList["subtask finished"]
+                knife.release()
+                agent.pickup(plate_item)
+                agent.holding.contain(food_item)
+            else:
+                # Penalty for placing unchopped food on a plate
+                self.reward += self.rewardList["metatask failed"]
+        elif isinstance(knife.holding, Plate) and isinstance(agent.holding, Plate):
+            # Penalty for holding a plate while the knife is holding a plate
+            self.reward += self.rewardList["metatask failed"]
+
+    def _handle_delivery(self, agent, tx, ty):
+        item = agent.holding
+
+        if isinstance(item, Plate):
+            if item.containing:
+                dish_name = self._compose_dish_name(item.containing)
+                if dish_name in self.task:
+                    self._finalize_delivery(agent, item, dish_name, tx, ty)
+                else:
+                    self._fail_delivery(agent, item, tx, ty)
+            else:
+                self._fail_delivery(agent, item, tx, ty)
+
+        else:
+            self._fail_delivery(agent, item, tx, ty)
+
+    def _compose_dish_name(self, contents):
+        food_types = [Lettuce, Onion, Tomato]
+        found = [-1] * len(food_types)
+
+        for idx, f in enumerate(contents):
+            for i, t in enumerate(food_types):
+                if isinstance(f, t):
+                    found[i] = idx
+
+        names = [contents[i].rawName for i in found if i >= 0]
+        return "-".join(names) + " salad"
+
+    def _finalize_delivery(self, agent, plate, dish_name, tx, ty):
+        idx = TASKLIST.index(dish_name)
+        if self.taskCompletionStatus[idx] > 0:
+            self.taskCompletionStatus[idx] -= 1
+            self.reward += self.rewardList["correct delivery"]
+        else:
+            self.reward += self.rewardList["wrong delivery"]
+
+        agent.putdown(tx, ty)
+        for f in plate.containing:
+            f.refresh()
+            self.map[f.x][f.y] = ITEMIDX[f.rawName]
+        plate.release()
+        plate.refresh()
+        self.map[plate.x][plate.y] = ITEMIDX[plate.name]
+
+        if self._check_task_completion():
+            self.reward += self.rewardList["correct delivery"]
+            self.done = True
+
+    def _fail_delivery(self, agent, item, tx, ty):
+        self.reward += self.rewardList["wrong delivery"]
+        agent.putdown(tx, ty)
+        if isinstance(item, Plate):
+            item.refresh()
+            self.map[item.x][item.y] = ITEMIDX[item.name]
+        elif isinstance(item, Food):
+            item.refresh()
+            self.map[item.x][item.y] = ITEMIDX[item.rawName]
 
     def render(self, mode='human'):
         return self.game.on_render()

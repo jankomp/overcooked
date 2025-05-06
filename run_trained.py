@@ -65,7 +65,7 @@ def sample_action(mdl, obs, action_space_shape):
 def load_modules(args):
     current_dir = os.getcwd()
     storage_path = os.path.join(current_dir, args.save_dir)
-    p = f"{storage_path}/{"centralized" if args.centralized else "decentralized"}_{args.name}_{args.rl_module}_*"
+    p = f"{storage_path}/{'centralized' if args.centralized else 'decentralized'}_{args.name}_{args.rl_module}_*"
     experiment_name = glob.glob(p)[-1]
     print(f"Loading results from {experiment_name}...")
     restored_tuner = tune.Tuner.restore(experiment_name, trainable="PPO")

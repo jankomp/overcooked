@@ -113,3 +113,4 @@ runs/
 wandb/
 .idea/
 nohup.out
+output.csv
