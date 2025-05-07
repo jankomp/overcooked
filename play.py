@@ -22,11 +22,12 @@ class Player:
     }
 
     REWARD_LIST = {
+        "metatask failed": -1,
         "subtask finished": 10,
-        "metatask failed": -5,
         "correct delivery": 200,
         "wrong delivery": -5,
-        "step penalty": -0.1
+        "step penalty": -0.5,
+        "right step": 0.5,
     }
 
     def __init__(self, grid_dim, task, map_type, mode, debug, agent='human'):
@@ -86,15 +87,15 @@ class Player:
 
 
             if self.agent == 'human':
-                input_ai = input("Input AI: ").strip().split(" ")
-
+                input_ai = input("Input AI: ").strip().split(" ")[0]
+                input_ai = self.ACTION_MAPPING[input_ai]
 
             else:
                 input_ai = self.agent._forward_inference({"obs": [obs['ai']]})['actions']
 
             action = {
                 "human": self.ACTION_MAPPING[input_human[0]],
-                "ai": self.ACTION_MAPPING[input_ai[0]]
+                "ai": input_ai if isinstance(input_ai, int) else input_ai[0]
             }
 
             row.append(action['human'])
@@ -128,7 +129,7 @@ class Player:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--grid_dim', type=int, nargs=2, default=[5, 5], help='Grid world size')
+    parser.add_argument('--grid_dim', type=int, nargs=2, default=[7, 7], help='Grid world size')
     parser.add_argument('--task', type=int, default=0, help='The recipe agent cooks')
     parser.add_argument('--map_type', type=str, default="A", help='The type of map')
     parser.add_argument('--mode', type=str, default="vector", help='The type of observation (vector/image)')

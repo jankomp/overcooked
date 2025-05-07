@@ -14,11 +14,12 @@ import os
 
 def define_env(centralized):
     reward_config = {
-        "metatask failed": 0,
+        "metatask failed": -1,
         "subtask finished": 10,
         "correct delivery": 200,
         "wrong delivery": -5,
-        "step penalty": -0.1,
+        "step penalty": -0.5,
+        "right step": 0.5,
     }
     env_params = {
         "centralized": centralized,
@@ -91,6 +92,9 @@ def define_training(centralized, human_policy, policies_to_train):
     model_config = DefaultModelConfig()
     model_config.fcnet_hiddens = [256, 256, 256] # one more hidden layer than default
     model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
+    #model_config.use_lstm = True # use LSTM so we have memory
+    #model_config.lstm_use_prev_action = True
+    #model_config.lstm_use_prev_reward = True
     rl_module_spec = RLModuleSpec(model_config=model_config)
 
 
@@ -144,7 +148,7 @@ def train(args, config):
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
-            stop={"training_iteration": 1000},
+            stop={"training_iteration": 250},
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
     )

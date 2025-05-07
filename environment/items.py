@@ -7,6 +7,9 @@ class Item(object):
         self.x = pos_x
         self.y = pos_y
 
+    def get_xy(self):
+        return self.x, self.y
+
 class MovableItem(Item):
     def __init__(self, pos_x, pos_y):
         super().__init__(pos_x, pos_y)

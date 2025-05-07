@@ -371,12 +371,12 @@ class Overcooked_multi(MultiAgentEnv):
         self.itemDic = {name: [] for name in ITEMNAME if name != "space" and name != "counter"}
         agent_idx = 0
 
-        self.knife = []
-        self.delivery = []
-        self.tomato = []
-        self.lettuce = []
-        self.onion = []
-        self.plate = []
+        self.knifes = []
+        self.deliveries = []
+        self.tomatoes = []
+        self.lettuces = []
+        self.onions = []
+        self.plates = []
 
         for x in range(self.xlen):
             for y in range(self.ylen):
@@ -387,27 +387,27 @@ class Overcooked_multi(MultiAgentEnv):
                 elif item_type == "knife":
                     new_knife = Knife(x, y)
                     self.itemDic[item_type].append(new_knife)
-                    self.knife.append(new_knife)
+                    self.knifes.append(new_knife)
                 elif item_type == "delivery":
                     new_delivery = Delivery(x, y)
                     self.itemDic[item_type].append(new_delivery)
-                    self.delivery.append(new_delivery)
+                    self.deliveries.append(new_delivery)
                 elif item_type == "tomato":
                     new_tomato = Tomato(x, y)
                     self.itemDic[item_type].append(new_tomato)
-                    self.tomato.append(new_tomato)
+                    self.tomatoes.append(new_tomato)
                 elif item_type == "lettuce":
                     new_lettuce = Lettuce(x, y)
                     self.itemDic[item_type].append(new_lettuce)
-                    self.lettuce.append(new_lettuce)
+                    self.lettuces.append(new_lettuce)
                 elif item_type == "onion":
                     new_onion = Onion(x, y)
                     self.itemDic[item_type].append(new_onion)
-                    self.onion.append(new_onion)
+                    self.onions.append(new_onion)
                 elif item_type == "plate":
                     new_plate = Plate(x, y)
                     self.itemDic[item_type].append(new_plate)
-                    self.plate.append(new_plate)
+                    self.plates.append(new_plate)
 
         self.itemList = [item for sublist in self.itemDic.values() for item in sublist]
         self.agent = self.itemDic["agent"]
@@ -742,6 +742,12 @@ class Overcooked_multi(MultiAgentEnv):
         self._createItems()
         self.step_count = 0
 
+        # for denser reward signal
+        # 0 = to pick, 1 = to chop, 2 = to put on plate, 3 = to deliver
+        self.foods_stage = {'tomato': 0, 'lettuce': 0, 'onion': 0}
+        self.foods_distances = {'tomato': float('inf'), 'lettuce': float('inf'), 'onion': float('inf')}
+        self._calc_item_distances()
+
         # Reset task completion status
         self.taskCompletionStatus = [1 if element in [self.task] else 0 for element in TASKLIST]
 
@@ -770,6 +776,8 @@ class Overcooked_multi(MultiAgentEnv):
                     continue
                 self._execute_agent_action(agent, action_list, idx)
 
+        self.reward += self._calc_item_distances() * self.rewardList['right step']
+
         done = done or self._check_task_completion()
         terminateds = {"__all__": done or self.step_count >= self.max_episode_length}
         rewards = {agent: self.reward for agent in self.agents}
@@ -780,6 +788,35 @@ class Overcooked_multi(MultiAgentEnv):
             print("rewards:", rewards)
 
         return self._get_obs(), rewards, terminateds, {'__all__': truncated}, infos
+    
+    def _calc_item_distances(self):
+        improvement = 0
+        for food_name in ['tomato', 'lettuce', 'onion']:
+            if food_name in self.task:
+                new_tomato_dist = self.foods_distances[food_name]
+                food = self.tomatoes if food_name == 'tomato' else []
+                food = self.lettuces if food_name == 'lettuce' else food
+                food = self.onions if food_name == 'onion' else food
+                if self.foods_stage[food_name] == 0:
+                    distances = [self._distance_between(food_item, agent) for food_item in food for agent in self.agent]
+                elif self.foods_stage[food_name] == 1:
+                    distances = [self._distance_between(food_item, knife) for food_item in food for knife in self.knifes]
+                elif self.foods_stage[food_name] == 2:
+                    distances = [self._distance_between(food_item, plate) for food_item in food for plate in self.plates]
+                elif self.foods_stage[food_name] == 3:
+                    distances = [self._distance_between(food_item, delivery) for food_item in food for delivery in self.deliveries]
+                else:
+                    distances = [float('inf')]
+                new_tomato_dist = min(min(distances), new_tomato_dist)
+                new_improvement = max(0, self.foods_distances[food_name] - new_tomato_dist)
+                improvement += new_improvement if new_improvement < 10 else 0
+                self.foods_distances[food_name] = new_tomato_dist
+        return improvement
+
+    def _distance_between(self, item_1, item_2):
+        x1, y1 = item_1.get_xy()
+        x2, y2 = item_2.get_xy()
+        return abs(x1 - x2) + abs(y1 - y2)
     
     def _split_centralized_actions(self, action):
         player_actions = {player: action["ai"][idx] for idx, player in enumerate(self.players[:-1])}
@@ -860,6 +897,7 @@ class Overcooked_multi(MultiAgentEnv):
         if target_name in ["tomato", "lettuce", "plate", "onion"]:
             item = self._findItem(tx, ty, target_name)
             agent.pickup(item)
+            self._set_picked(agent)
             self.map[tx][ty] = ITEMIDX["counter"]
 
         elif target_name == "knife":
@@ -877,8 +915,51 @@ class Overcooked_multi(MultiAgentEnv):
                     knife.holding.chop()
                     self.reward += self.rewardList["subtask finished"]
                     if knife.holding.chopped:
+                        self._set_chopped(knife)
                         if any(knife.holding.rawName in task for task in self.task):
                             self.reward += self.rewardList["subtask finished"]
+
+    def _set_picked(self, agent):
+        for food_name in ['tomato', 'lettuce', 'onion']:
+            if not agent or not agent.holding:
+                return
+            item = agent.holding
+
+            old_food_stage = self.foods_stage[food_name]
+            if old_food_stage > 0:
+                continue
+            self.foods_stage[food_name] = 1 if (isinstance(item, Food) and item.rawName == food_name) else self.foods_stage[food_name]
+            if old_food_stage == 0 and self.foods_stage[food_name] == 1:
+                self.foods_distances[food_name] = float('inf')
+
+    def _set_chopped(self, knife):
+        for food_name in ['tomato', 'lettuce', 'onion']:
+            if not knife or not knife.holding:
+                return
+            item = knife.holding
+
+            old_food_stage = self.foods_stage[food_name]
+            if old_food_stage > 1:
+                continue
+            self.foods_stage[food_name] = 2 if (isinstance(item, Food) and item.rawName == food_name) else self.foods_stage[food_name]
+            if old_food_stage == 1 and self.foods_stage[food_name] == 2:
+                self.foods_distances[food_name] = float('inf')
+
+    def _set_on_plate(self, plate):
+        for food_name in ['tomato', 'lettuce', 'onion']:
+            if not plate or not plate.containing:
+                return
+            for item in plate.containing:
+                old_food_stage = self.foods_stage[food_name]
+                if old_food_stage > 2:
+                    continue
+                self.foods_stage[food_name] = 3 if (isinstance(item, Food) and item.rawName == food_name and item.chopped) else self.foods_stage[food_name]
+                if old_food_stage == 2 and self.foods_stage[food_name] == 3:
+                    self.foods_distances[food_name] = float('inf')
+
+    def _set_delivered(self):
+        self.foods_stage = {'tomato': 0, 'lettuce': 0, 'onion': 0}
+        self.foods_distances = {'tomato': float('inf'), 'lettuce': float('inf'), 'onion': float('inf')}
 
     def _try_putdown(self, agent, tx, ty, target_name):
         item = agent.holding
@@ -894,6 +975,7 @@ class Overcooked_multi(MultiAgentEnv):
                 plate = self._findItem(tx, ty, target_name)
                 agent.putdown(tx, ty)
                 plate.contain(item)
+                self._set_on_plate(plate)
                 self.reward += self.rewardList["subtask finished"]
             else:
                 self.reward += self.rewardList["metatask failed"]
@@ -909,6 +991,7 @@ class Overcooked_multi(MultiAgentEnv):
             if food_item.chopped and isinstance(item, Plate):
                 item.contain(food_item)
                 self.map[tx][ty] = ITEMIDX["counter"]
+                self._set_on_plate(item)
                 self.reward += self.rewardList["subtask finished"]
             else:
                 self.reward += self.rewardList["metatask failed"]
@@ -935,6 +1018,7 @@ class Overcooked_multi(MultiAgentEnv):
             if item.chopped:
                 self.reward += self.rewardList["subtask finished"]
                 knife.release()
+                self._set_on_plate(agent.holding)
                 agent.holding.contain(item)
             else:
                 # Penalty for placing unchopped food on a plate
@@ -950,6 +1034,7 @@ class Overcooked_multi(MultiAgentEnv):
                 self.reward += self.rewardList["subtask finished"]
                 knife.release()
                 agent.pickup(plate_item)
+                self._set_on_plate(plate_item)
                 agent.holding.contain(food_item)
             else:
                 # Penalty for placing unchopped food on a plate
@@ -991,6 +1076,7 @@ class Overcooked_multi(MultiAgentEnv):
         if self.taskCompletionStatus[idx] > 0:
             self.taskCompletionStatus[idx] -= 1
             self.reward += self.rewardList["correct delivery"]
+            self._set_delivered()
         else:
             self.reward += self.rewardList["wrong delivery"]
 
@@ -1004,6 +1090,7 @@ class Overcooked_multi(MultiAgentEnv):
 
         if self._check_task_completion():
             self.reward += self.rewardList["correct delivery"]
+            self._set_delivered()
             self.done = True
 
     def _fail_delivery(self, agent, item, tx, ty):

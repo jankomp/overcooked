@@ -69,7 +69,7 @@ class Game:
                     fill = pygame.Rect(sl[0], sl[1], self.scale, self.scale)                    
                     pygame.draw.rect(self.screen, Color.DELIVERY, fill)
                     self.draw('delivery', self.tile_size, sl)
-                    for k in self.env.delivery:
+                    for k in self.env.deliveries:
                         if k.x == x and k.y == y:
                             if k.holding:
                                 self.draw(k.holding.name, self.tile_size, sl)
@@ -81,7 +81,7 @@ class Game:
                     pygame.draw.rect(self.screen, Color.COUNTER, fill)
                     pygame.draw.rect(self.screen, Color.COUNTER_BORDER, fill, 1)
                     self.draw('cutboard', self.tile_size, sl)
-                    for k in self.env.knife:
+                    for k in self.env.knifes:
                         if k.x == x and k.y == y:
                             if k.holding:
                                 self.draw(k.holding.name, self.tile_size, sl)
@@ -92,21 +92,21 @@ class Game:
                     fill = pygame.Rect(sl[0], sl[1], self.scale, self.scale)
                     pygame.draw.rect(self.screen, Color.COUNTER, fill)
                     pygame.draw.rect(self.screen, Color.COUNTER_BORDER, fill, 1)
-                    for t in self.env.tomato:
+                    for t in self.env.tomatoes:
                         if t.x == x and t.y == y:
                             self.draw(t.name, self.tile_size, sl)
                 elif self.env.map[x][y] == ITEMIDX["lettuce"]:
                     fill = pygame.Rect(sl[0], sl[1], self.scale, self.scale)
                     pygame.draw.rect(self.screen, Color.COUNTER, fill)
                     pygame.draw.rect(self.screen, Color.COUNTER_BORDER, fill, 1)
-                    for l in self.env.lettuce:
+                    for l in self.env.lettuces:
                         if l.x == x and l.y == y:
                             self.draw(l.name, self.tile_size, sl)
                 elif self.env.map[x][y] == ITEMIDX["onion"]:
                     fill = pygame.Rect(sl[0], sl[1], self.scale, self.scale)
                     pygame.draw.rect(self.screen, Color.COUNTER, fill)
                     pygame.draw.rect(self.screen, Color.COUNTER_BORDER, fill, 1)
-                    for l in self.env.onion:
+                    for l in self.env.onions:
                         if l.x == x and l.y == y:
                             self.draw(l.name, self.tile_size, sl)
                 elif self.env.map[x][y] == ITEMIDX["plate"]:
@@ -114,7 +114,7 @@ class Game:
                     pygame.draw.rect(self.screen, Color.COUNTER, fill)
                     pygame.draw.rect(self.screen, Color.COUNTER_BORDER, fill, 1)
                     self.draw('plate', self.tile_size, sl)
-                    for p in self.env.plate:
+                    for p in self.env.plates:
                         if p.x == x and p.y == y:
                             if p.containing:
                                 self.draw(p.containedName, self.container_size, self.container_location((y, x)))
