@@ -25,7 +25,7 @@ def define_environment(centralized):
         "metatask failed": -1,
         "subtask finished": 10,
         "correct delivery": 200,
-        "wrong delivery": -5,
+        "wrong delivery": -50,
         "step penalty": -0.5,
         "right step": 0.5,
     }

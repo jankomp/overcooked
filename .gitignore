@@ -110,7 +110,8 @@ dmypy.json
 
 experiments/
 runs/
+grid_search/
 wandb/
 .idea/
-nohup.out
+*.out
 output.csv

@@ -17,7 +17,7 @@ def define_env(centralized):
         "metatask failed": -1,
         "subtask finished": 10,
         "correct delivery": 200,
-        "wrong delivery": -50,
+        "wrong delivery": -5,
         "step penalty": -0.5,
         "right step": 0.5,
     }
@@ -77,22 +77,25 @@ def define_training(centralized, human_policy, policies_to_train):
         .training( # these are hyper paramters for PPO
             use_critic=True,
             use_gae=True,
+            # Key parameters for grid search
+            #param=tune.grid_search([1, 2, 3]),
+            # Fixed parameters
             lr=1e-3,
-            lambda_=0.95,
-            gamma=0.99,
-            clip_param=0.2,
-            entropy_coeff=0.03,
             vf_loss_coeff=0.1,
-            grad_clip=0.5,
+            grad_clip=0.5, 
+            gamma=0.99,
+            entropy_coeff=0.03,
+            clip_param=0.2,
+            lambda_=0.95,
             num_epochs=10,
             minibatch_size=128,
         )
     )
 
     model_config = DefaultModelConfig()
-    model_config.fcnet_hiddens = [64, 64] # hidden layers
+    model_config.fcnet_hiddens = [64, 64] # instead of default [256, 256]
     model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
-    #model_config.use_lstm = True # use LSTM so we have memory
+    #model_config.use_lstm = True
     #model_config.lstm_cell_size = 128 
     #model_config.lstm_use_prev_action = True
     #model_config.lstm_use_prev_reward = True
@@ -149,27 +152,37 @@ def train(args, config):
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
-            stop={"training_iteration": 500},
+            stop={
+                "training_iteration": 250,
+                "env_runners/episode_return_mean": 0,  # Stop if we reach target reward
+            },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
     )
-    tuner.fit()
+    results = tuner.fit()
+
+    best_result = results.get_best_result(metric="env_runners/episode_return_mean", mode="max")
+    print("Best hyperparameters found were:", best_result.config)
+    print(f"Best mean reward: {best_result.metrics['env_runners/episode_return_mean']}")
+    
+    return best_result
 
 def main(args):
     define_env(args.centralized)
     human_policy, policies_to_train = define_agents(args)
     config = define_training(args.centralized, human_policy, policies_to_train)
-    train(args, config)
+    best_result = train(args, config)
+    return best_result
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--save_dir", default="runs", type=str)
+    parser.add_argument("--save_dir", default="grid_serach", type=str)
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned")
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()
 
-    ip = main(args)
+    best_result = main(args)
