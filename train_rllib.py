@@ -23,7 +23,7 @@ def define_env(centralized):
     }
     env_params = {
         "centralized": centralized,
-        "grid_dim": [7, 7],
+        "grid_dim": [5, 5],
         "task": "tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
@@ -149,7 +149,7 @@ def train(args, config):
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
-            stop={"training_iteration": 500},
+            stop={"training_iteration": 200},
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
     )
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
-    parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned")
+    parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()

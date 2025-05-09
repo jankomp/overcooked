@@ -31,7 +31,7 @@ def define_environment(centralized):
     }
     env_params = {
         "centralized": centralized,
-        "grid_dim": [7, 7],
+        "grid_dim": [5, 5],
         "task": "tomato salad",
         "rewardList": reward_config,
         "map_type": "A",

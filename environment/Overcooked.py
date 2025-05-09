@@ -1104,5 +1104,6 @@ class Overcooked_multi(MultiAgentEnv):
             self.map[item.x][item.y] = ITEMIDX[item.rawName]
 
     def render(self, mode='human'):
+        # TODO: handle mode = 'rgb_array and save the episode to gif
         return self.game.on_render()
 
