@@ -39,7 +39,7 @@ def define_environment(centralized):
         "debug": False,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
-        "max_episode_length": 100,
+        "max_episode_length": 50,
     }
 
     env = Overcooked_multi(**env_params)

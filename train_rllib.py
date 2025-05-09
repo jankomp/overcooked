@@ -31,7 +31,7 @@ def define_env(centralized):
         "debug": False,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
-        "max_episode_length": 100,
+        "max_episode_length": 50,
     }
 
     register_env(
@@ -149,7 +149,7 @@ def train(args, config):
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
-            stop={"training_iteration": 200},
+            stop={"training_iteration": 400},
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
     )

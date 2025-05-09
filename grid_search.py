@@ -23,7 +23,7 @@ def define_env(centralized):
     }
     env_params = {
         "centralized": centralized,
-        "grid_dim": [7, 7],
+        "grid_dim": [5, 5],
         "task": "tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
@@ -31,7 +31,7 @@ def define_env(centralized):
         "debug": False,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
-        "max_episode_length": 100,
+        "max_episode_length": 50,
     }
 
     register_env(
@@ -80,10 +80,10 @@ def define_training(centralized, human_policy, policies_to_train):
             # Key parameters for grid search
             #param=tune.grid_search([1, 2, 3]),
             # Fixed parameters
-            lr=1e-3,
-            vf_loss_coeff=0.1,
+            lr=tune.grid_search([5e-4, 1e-3, 2e-3]),
+            vf_loss_coeff=tune.grid_search([0.1, 0.2]),
             grad_clip=0.5, 
-            gamma=0.99,
+            gamma=tune.grid_search([0.98, 0.99]),
             entropy_coeff=0.03,
             clip_param=0.2,
             lambda_=0.95,
@@ -153,7 +153,7 @@ def train(args, config):
             storage_path=storage_path,
             name=experiment_name,
             stop={
-                "training_iteration": 250,
+                "training_iteration": 10,
                 "env_runners/episode_return_mean": 0,  # Stop if we reach target reward
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
@@ -162,8 +162,10 @@ def train(args, config):
     results = tuner.fit()
 
     best_result = results.get_best_result(metric="env_runners/episode_return_mean", mode="max")
-    print("Best hyperparameters found were:", best_result.config)
-    print(f"Best mean reward: {best_result.metrics['env_runners/episode_return_mean']}")
+    hyper_param_names = ['lr', 'vf_loss_coeff', 'grad_clip', 'gamma', 'entropy_coeff', 'clip_param', 'lambda', 'num_epochs', 'minibatch_size']
+    best_hyper_params = [f"{name}: {best_result.config[name]}" for name in hyper_param_names]
+    print("Best hyperparameters found were:", best_hyper_params)
+    print(f"Best mean reward: {best_result.metrics['env_runners']['episode_return_mean']}")
     
     return best_result
 
@@ -178,7 +180,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--save_dir", default="grid_serach", type=str)
+    parser.add_argument("--save_dir", default="grid_search", type=str)
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned")
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
