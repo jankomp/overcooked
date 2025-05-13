@@ -126,7 +126,7 @@ class Overcooked_multi(MultiAgentEnv):
                         [1, 1, 1, 1, 1]] 
         elif self.n_agents == 3:
             if self.mapType == "A":
-                map =  [[1, 1, 5, 1, 1],
+                map =  [[1, 4, 5, 8, 1],
                         [6, 2, 0, 2, 1],
                         [3, 0, 0, 0, 6],
                         [7, 0, 2, 0, 1],
@@ -136,13 +136,13 @@ class Overcooked_multi(MultiAgentEnv):
                         [6, 2, 1, 2, 1],
                         [3, 0, 5, 2, 6],
                         [7, 0, 5, 0, 1],
-                        [1, 1, 1, 1, 1]]  
+                        [1, 8, 1, 4, 1]]  
             elif self.mapType == "C":
                 map =  [[1, 1, 1, 5, 1],
                         [6, 2, 1, 2, 1],
                         [3, 0, 5, 0, 6],
-                        [7, 2, 0, 0, 1],
-                        [1, 1, 1, 1, 1]] 
+                        [7, 2, 0, 0, 8],
+                        [1, 1, 1, 4, 1]] 
         return map
     
     def _map_3x5(self):
@@ -737,7 +737,15 @@ class Overcooked_multi(MultiAgentEnv):
         obs : list
             observation for each agent.
         """
-        #TODO: change to task index and randomize locations of items
+        # randomly pick the recipe and the map type
+        self.task = np.random.choice(TASKLIST)
+        if self.debug:
+            print(f"recipe: {self.task}")
+        self.oneHotTask = [1 if t in self.task else 0 for t in TASKLIST]
+        # TODO: when we use a human with a rational policy, we can start to vary the map type
+        #self.mapType = np.random.choice(['A', 'B', 'C'])
+        #self.initMap = self._initialize_map()
+
         self.map = copy.deepcopy(self.initMap)
         self._createItems()
         self.step_count = 0
@@ -913,11 +921,11 @@ class Overcooked_multi(MultiAgentEnv):
                     agent.pickup(item)
                 else:
                     knife.holding.chop()
-                    self.reward += self.rewardList["subtask finished"]
+                    self.reward += self.rewardList["pretask finished"]
                     if knife.holding.chopped:
                         self._set_chopped(knife)
                         if any(knife.holding.rawName in task for task in self.task):
-                            self.reward += self.rewardList["subtask finished"]
+                            self.reward += self.rewardList["pretask finished"]
 
     def _set_picked(self, agent):
         for food_name in ['tomato', 'lettuce', 'onion']:
@@ -1009,7 +1017,7 @@ class Overcooked_multi(MultiAgentEnv):
                     self.reward += self.rewardList["metatask failed"]
                 else:
                     # Reward for placing unchopped food on the knife
-                    self.reward += self.rewardList["subtask finished"]
+                    self.reward += self.rewardList["pretask finished"]
             else:
                 self.reward += self.rewardList["metatask failed"]
         # If the knife is holding food and the agent is holding a plate, place the food on the plate

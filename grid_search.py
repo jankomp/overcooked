@@ -153,8 +153,8 @@ def train(args, config):
             storage_path=storage_path,
             name=experiment_name,
             stop={
-                "training_iteration": 10,
-                "env_runners/episode_return_mean": 0,  # Stop if we reach target reward
+                "training_iteration": 100,
+                "env_runners/episode_return_mean": 100,  # Stop if we reach target reward
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )

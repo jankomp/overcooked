@@ -14,7 +14,8 @@ import os
 
 def define_env(centralized):
     reward_config = {
-        "metatask failed": -1,
+        "metatask failed": -5,
+        "pretask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
         "wrong delivery": -50,
@@ -31,7 +32,7 @@ def define_env(centralized):
         "debug": False,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
-        "max_episode_length": 50,
+        "max_episode_length": 100,
     }
 
     register_env(
@@ -77,12 +78,12 @@ def define_training(centralized, human_policy, policies_to_train):
         .training( # these are hyper paramters for PPO
             use_critic=True,
             use_gae=True,
-            lr=1e-3,
+            lr=2e-3,
             lambda_=0.95,
             gamma=0.99,
             clip_param=0.2,
             entropy_coeff=0.03,
-            vf_loss_coeff=0.1,
+            vf_loss_coeff=0.2,
             grad_clip=0.5,
             num_epochs=10,
             minibatch_size=128,
@@ -149,7 +150,7 @@ def train(args, config):
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
-            stop={"training_iteration": 400},
+            stop={"training_iteration": 1000},
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
     )

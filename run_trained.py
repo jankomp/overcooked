@@ -22,7 +22,7 @@ import numpy as np
 
 def define_environment(centralized):
     reward_config = {
-        "metatask failed": -1,
+        "metatask failed": -5,
         "subtask finished": 10,
         "correct delivery": 200,
         "wrong delivery": -50,
@@ -36,10 +36,10 @@ def define_environment(centralized):
         "rewardList": reward_config,
         "map_type": "A",
         "mode": "vector",
-        "debug": False,
+        "debug": True,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
-        "max_episode_length": 50,
+        "max_episode_length": 100,
     }
 
     env = Overcooked_multi(**env_params)
@@ -134,6 +134,7 @@ def main(args):
     if args.centralized:
         ai_action_space_shape = np.array([env.action_spaces["ai"].shape[0], env.action_spaces["ai"][0].n])
 
+    n_episodes = args.n_episodes
     while True:
         if args.centralized:
             ai_action = sample_action(ai_module, torch.from_numpy(obs['ai']).unsqueeze(0).float(), ai_action_space_shape)
@@ -153,7 +154,11 @@ def main(args):
         time.sleep(0.1)
 
         if terminateds['__all__']:
-            break
+            n_episodes -= 1
+            if n_episodes == 0:
+                break
+            else:
+                obs, info, env.reset()
 
 if __name__ == "__main__":
     import argparse
@@ -163,6 +168,7 @@ if __name__ == "__main__":
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="stationary", type=str)
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
+    parser.add_argument("--n_episodes", default=3, type=int, help="how many episodes should be run at once?")
 
     args = parser.parse_args()
 

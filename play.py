@@ -22,12 +22,12 @@ class Player:
     }
 
     REWARD_LIST = {
-        "metatask failed": -1,
+        "metatask failed": -5,
         "subtask finished": 10,
         "correct delivery": 200,
         "wrong delivery": -50,
         "step penalty": -0.5,
-        "right step": 0.5,
+        "right step": 1,
     }
 
     def __init__(self, grid_dim, task, map_type, mode, debug, agent='human'):
@@ -37,6 +37,8 @@ class Player:
             'rewardList': self.REWARD_LIST,
             'map_type': map_type,
             'mode': mode,
+            "agents": ['ai1', 'ai2', 'human'],
+            "n_players": 3,
             'debug': debug,
             'centralized': False,
         }
@@ -87,26 +89,32 @@ class Player:
 
 
             if self.agent == 'human':
-                input_ai = input("Input AI: ").strip().split(" ")[0]
-                input_ai = self.ACTION_MAPPING[input_ai]
+                input_ai1 = input("Input AI1: ").strip().split(" ")[0]
+                input_ai1 = self.ACTION_MAPPING[input_ai1]
 
+                input_ai2 = input("Input AI2: ").strip().split(" ")[0]
+                input_ai2 = self.ACTION_MAPPING[input_ai2]
             else:
-                input_ai = self.agent._forward_inference({"obs": [obs['ai']]})['actions']
+                input_ai1 = self.agent._forward_inference({"obs": [obs['ai1']]})['actions']
+                input_ai2 = self.agent._forward_inference({"obs": [obs['ai2']]})['actions']
 
             action = {
+                "ai1": input_ai1 if isinstance(input_ai1, int) else input_ai1[0],
+                "ai2": input_ai2 if isinstance(input_ai2, int) else input_ai2[0],
                 "human": self.ACTION_MAPPING[input_human[0]],
-                "ai": input_ai if isinstance(input_ai, int) else input_ai[0]
             }
 
             row.append(action['human'])
-            row.append(action['ai'])
+            row.append(action['ai1'])
+            row.append(action['ai2'])
 
 
             new_obs, reward, done, _, _ = self.env.step(action)
 
             row.append(new_obs['human'])
             row.append(reward['human'])
-            row.append(reward['ai'])
+            row.append(reward['ai1'])
+            row.append(reward['ai2'])
             row.append(done['__all__'])
 
             data.append(copy.deepcopy(row))
