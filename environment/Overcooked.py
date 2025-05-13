@@ -15,7 +15,7 @@ TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato sala
 
 class Overcooked_multi(MultiAgentEnv):
 
-    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=False, agents=["ai", "human"], n_players=2, max_episode_length=80):
+    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False):
         super().__init__()
         self.step_count = 0
         self.centralized = centralized
@@ -29,7 +29,14 @@ class Overcooked_multi(MultiAgentEnv):
 
         self.task = task
         self.rewardList = rewardList
-        self.mapType = map_type
+        
+        self.multi_map = multi_map
+        self.switch_init_pos = switch_init_pos
+        if self.multi_map:
+            self.mapType_list = map_type
+            self.mapType = self.mapType_list[np.random.randint(0, len(self.mapType_list))] 
+        else:
+            self.mapType = map_type
         self.debug = debug
         self.mode = mode
 
@@ -142,8 +149,13 @@ class Overcooked_multi(MultiAgentEnv):
                         [6, 2, 1, 2, 1],
                         [3, 0, 5, 0, 6],
                         [7, 2, 0, 0, 8],
-                        [1, 1, 1, 4, 1]] 
-        return map
+                        [1, 1, 1, 4, 1]]
+        try: 
+            return map
+        except:
+            raise Exception(f"Map not properly initialized. mapType: {self.mapType}, n_agents: {self.n_agents}")
+            
+
     
     def _map_3x5(self):
         if self.n_agents == 2:
@@ -182,8 +194,8 @@ class Overcooked_multi(MultiAgentEnv):
                         [3, 0, 5, 0, 6],
                         [7, 2, 0, 0, 1],
                         [1, 1, 1, 1, 1]] 
-            return map
-        
+        return map
+
     def _map_7x7(self):
         if self.n_agents == 2:
             if self.mapType == "A":
@@ -408,7 +420,10 @@ class Overcooked_multi(MultiAgentEnv):
                     new_plate = Plate(x, y)
                     self.itemDic[item_type].append(new_plate)
                     self.plates.append(new_plate)
-
+        
+        if self.switch_init_pos and len(self.itemDic["agent"]) >= 2 and np.random.random() < 0.5:
+            self.itemDic["agent"][0], self.itemDic["agent"][1] = self.itemDic["agent"][1], self.itemDic["agent"][0]
+        
         self.itemList = [item for sublist in self.itemDic.values() for item in sublist]
         self.agent = self.itemDic["agent"]
 
@@ -743,7 +758,13 @@ class Overcooked_multi(MultiAgentEnv):
         # TODO: when we use a human with a rational policy, we can start to vary the map type
         #self.mapType = np.random.choice(['A', 'B', 'C'])
         #self.initMap = self._initialize_map()
-
+        
+        if self.multi_map:
+            self.mapType = self.mapType_list[np.random.randint(0, len(self.mapType_list))]
+            self.initMap = self._initialize_map()
+            if self.debug:
+                print(f"map type updated to {self.mapType}")
+        
         self.map = copy.deepcopy(self.initMap)
         self._createItems()
         self.step_count = 0
