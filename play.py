@@ -23,6 +23,7 @@ class Player:
 
     REWARD_LIST = {
         "metatask failed": -5,
+        "pretask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
         "wrong delivery": -50,

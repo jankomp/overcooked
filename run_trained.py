@@ -23,6 +23,7 @@ import numpy as np
 def define_environment(centralized):
     reward_config = {
         "metatask failed": -5,
+        "pretask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
         "wrong delivery": -50,

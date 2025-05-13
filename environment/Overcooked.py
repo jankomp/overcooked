@@ -737,8 +737,6 @@ class Overcooked_multi(MultiAgentEnv):
         obs : list
             observation for each agent.
         """
-        # randomly pick the recipe and the map type
-        self.task = np.random.choice(TASKLIST)
         if self.debug:
             print(f"recipe: {self.task}")
         self.oneHotTask = [1 if t in self.task else 0 for t in TASKLIST]
@@ -820,6 +818,9 @@ class Overcooked_multi(MultiAgentEnv):
                 improvement += new_improvement if new_improvement < 10 else 0
                 self.foods_distances[food_name] = new_tomato_dist
         return improvement
+    
+    def _food_in_task(self, food_name):
+        return str(food_name).lower() in str(self.task).lower()
 
     def _distance_between(self, item_1, item_2):
         x1, y1 = item_1.get_xy()
@@ -836,9 +837,9 @@ class Overcooked_multi(MultiAgentEnv):
 
         if action_list[idx] < 4:
             self._attempt_move(agent, action_list, idx)
-        else:
-            for x, y in DIRECTION:
-                self._handle_interaction(agent, agent.x + x, agent.y + y)
+        #else:
+        #    for x, y in DIRECTION:
+        #        self._handle_interaction(agent, agent.x + x, agent.y + y)
 
     def _attempt_move(self, agent, action_list, idx):
         direction = action_list[idx]
@@ -921,10 +922,11 @@ class Overcooked_multi(MultiAgentEnv):
                     agent.pickup(item)
                 else:
                     knife.holding.chop()
-                    self.reward += self.rewardList["pretask finished"]
+                    if self._food_in_task(knife.holding.rawName):
+                        self.reward += self.rewardList["pretask finished"]
                     if knife.holding.chopped:
                         self._set_chopped(knife)
-                        if any(knife.holding.rawName in task for task in self.task):
+                        if self._food_in_task(knife.holding.rawName):
                             self.reward += self.rewardList["pretask finished"]
 
     def _set_picked(self, agent):
@@ -984,7 +986,8 @@ class Overcooked_multi(MultiAgentEnv):
                 agent.putdown(tx, ty)
                 plate.contain(item)
                 self._set_on_plate(plate)
-                self.reward += self.rewardList["subtask finished"]
+                if self._food_in_task(item.rawName):
+                    self.reward += self.rewardList["subtask finished"]
             else:
                 self.reward += self.rewardList["metatask failed"]
 
@@ -1000,7 +1003,8 @@ class Overcooked_multi(MultiAgentEnv):
                 item.contain(food_item)
                 self.map[tx][ty] = ITEMIDX["counter"]
                 self._set_on_plate(item)
-                self.reward += self.rewardList["subtask finished"]
+                if self._food_in_task(food_item.rawName):
+                    self.reward += self.rewardList["subtask finished"]
             else:
                 self.reward += self.rewardList["metatask failed"]
 
@@ -1017,14 +1021,16 @@ class Overcooked_multi(MultiAgentEnv):
                     self.reward += self.rewardList["metatask failed"]
                 else:
                     # Reward for placing unchopped food on the knife
-                    self.reward += self.rewardList["pretask finished"]
+                    if self._food_in_task(knife.holding.rawName):
+                        self.reward += self.rewardList["pretask finished"]
             else:
                 self.reward += self.rewardList["metatask failed"]
         # If the knife is holding food and the agent is holding a plate, place the food on the plate
         elif isinstance(knife.holding, Food) and isinstance(agent.holding, Plate):
             item = knife.holding
             if item.chopped:
-                self.reward += self.rewardList["subtask finished"]
+                if self._food_in_task(item.rawName):
+                    self.reward += self.rewardList["subtask finished"]
                 knife.release()
                 self._set_on_plate(agent.holding)
                 agent.holding.contain(item)
@@ -1039,7 +1045,8 @@ class Overcooked_multi(MultiAgentEnv):
             plate_item = knife.holding
             food_item = agent.holding
             if food_item.chopped:
-                self.reward += self.rewardList["subtask finished"]
+                if self._food_in_task(food_item.rawName):
+                    self.reward += self.rewardList["subtask finished"]
                 knife.release()
                 agent.pickup(plate_item)
                 self._set_on_plate(plate_item)

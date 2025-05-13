@@ -25,7 +25,7 @@ def define_env(centralized):
     env_params = {
         "centralized": centralized,
         "grid_dim": [5, 5],
-        "task": "tomato salad",
+        "task": "lettuce-onion-tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
         "mode": "vector",
@@ -91,7 +91,7 @@ def define_training(centralized, human_policy, policies_to_train):
     )
 
     model_config = DefaultModelConfig()
-    model_config.fcnet_hiddens = [64, 64] # hidden layers
+    model_config.fcnet_hiddens = [256, 256] # hidden layers
     model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
     #model_config.use_lstm = True # use LSTM so we have memory
     #model_config.lstm_cell_size = 128 
