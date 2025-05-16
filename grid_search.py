@@ -15,6 +15,7 @@ import os
 def define_env(centralized):
     reward_config = {
         "metatask failed": -1,
+        "pretask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
         "wrong delivery": -5,
@@ -31,7 +32,7 @@ def define_env(centralized):
         "debug": False,
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
-        "max_episode_length": 50,
+        "max_episode_length": 100,
     }
 
     register_env(
@@ -80,20 +81,20 @@ def define_training(centralized, human_policy, policies_to_train):
             # Key parameters for grid search
             #param=tune.grid_search([1, 2, 3]),
             # Fixed parameters
-            lr=tune.grid_search([5e-4, 1e-3, 2e-3]),
-            vf_loss_coeff=tune.grid_search([0.1, 0.2]),
+            lr=tune.grid_search([3e-3, 5e-3, 1e-2]),
+            vf_loss_coeff=0.2,
             grad_clip=0.5, 
-            gamma=tune.grid_search([0.98, 0.99]),
+            gamma=0.99,
             entropy_coeff=0.03,
             clip_param=0.2,
             lambda_=0.95,
             num_epochs=10,
-            minibatch_size=128,
+            minibatch_size=tune.grid_search([512, 1024, 2048]),
         )
     )
 
     model_config = DefaultModelConfig()
-    model_config.fcnet_hiddens = [64, 64] # instead of default [256, 256]
+    model_config.fcnet_hiddens = [64, 64, 64] # instead of default [256, 256]
     model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
     #model_config.use_lstm = True
     #model_config.lstm_cell_size = 128 
@@ -153,7 +154,7 @@ def train(args, config):
             storage_path=storage_path,
             name=experiment_name,
             stop={
-                "training_iteration": 100,
+                "training_iteration": 250,
                 "env_runners/episode_return_mean": 100,  # Stop if we reach target reward
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations

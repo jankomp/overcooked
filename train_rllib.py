@@ -86,12 +86,12 @@ def define_training(centralized, human_policy, policies_to_train):
             vf_loss_coeff=0.2,
             grad_clip=0.5,
             num_epochs=10,
-            minibatch_size=128,
+            minibatch_size=512,
         )
     )
 
     model_config = DefaultModelConfig()
-    model_config.fcnet_hiddens = [256, 256] # hidden layers
+    model_config.fcnet_hiddens = [64, 64, 64] # hidden layers
     model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
     #model_config.use_lstm = True # use LSTM so we have memory
     #model_config.lstm_cell_size = 128 
