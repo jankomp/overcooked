@@ -53,6 +53,8 @@ def define_agents(args):
         human_policy = RLModuleSpec(module_class=RandomRLM)
     elif args.rl_module == 'learned':
         human_policy = RLModuleSpec()
+        policies_to_train = ['ai', 'human'] if args.centralized else ['ai1', 'ai2', 'human']
+        return human_policy, policies_to_train
     else:
         raise NotImplementedError(f"{args.rl_module} not a valid human agent")
     
@@ -154,8 +156,8 @@ def train(args, config):
             storage_path=storage_path,
             name=experiment_name,
             stop={
-                "training_iteration": 250,
-                "env_runners/episode_return_mean": 100,  # Stop if we reach target reward
+                "training_iteration": 500,
+                "env_runners/episode_return_mean": 200,  # Stop if we reach target reward
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
@@ -183,7 +185,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", default="grid_search", type=str)
     parser.add_argument("--name", default="run", type=str)
-    parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned")
+    parser.add_argument("--rl_module", default="learned", help = "Set the policy of the human, can be stationary, random, or learned")
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()
