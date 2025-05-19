@@ -53,6 +53,8 @@ def define_agents(args):
         human_policy = RLModuleSpec(module_class=RandomRLM)
     elif args.rl_module == 'learned':
         human_policy = RLModuleSpec()
+        policies_to_train = ['ai', 'human'] if args.centralized else ['ai1', 'ai2', 'human']
+        return human_policy, policies_to_train
     else:
         raise NotImplementedError(f"{args.rl_module} not a valid human agent")
     
