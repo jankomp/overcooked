@@ -133,29 +133,56 @@ class Overcooked_multi(MultiAgentEnv):
                         [1, 1, 1, 1, 1]] 
         elif self.n_agents == 3:
             if self.mapType == "A":
-                map =  [[1, 4, 5, 8, 1],
-                        [6, 2, 0, 2, 1],
-                        [3, 0, 0, 0, 6],
-                        [7, 0, 2, 0, 1],
-                        [1, 1, 5, 1, 1]] 
+                map =  [[1, 1, 1, 1, 1],
+                        [1, 0, 0, 0, 1],
+                        [1, 0, 0, 0, 1],
+                        [1, 0, 0, 0, 1],
+                        [1, 1, 1, 1, 1]]
             elif self.mapType == "B":
                 map =  [[1, 1, 1, 1, 1],
-                        [6, 2, 1, 2, 1],
-                        [3, 0, 5, 2, 6],
-                        [7, 0, 5, 0, 1],
-                        [1, 8, 1, 4, 1]]  
+                        [1, 0, 1, 0, 1],
+                        [1, 0, 1, 0, 1],
+                        [1, 0, 1, 0, 1],
+                        [1, 1, 1, 1, 1]]
             elif self.mapType == "C":
-                map =  [[1, 1, 1, 5, 1],
-                        [6, 2, 1, 2, 1],
-                        [3, 0, 5, 0, 6],
-                        [7, 2, 0, 0, 8],
-                        [1, 1, 1, 4, 1]]
+                map =  [[1, 1, 1, 1, 1],
+                        [1, 0, 1, 0, 1],
+                        [1, 0, 1, 0, 1],
+                        [1, 0, 0, 0, 1],
+                        [1, 1, 1, 1, 1]]
+            counter_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 1 and self. _value_in_4_connectivity(map, row, col, 0)]
+            space_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 0]
+            # "space": 0, "counter": 1, "agent": 2, "tomato": 3, "lettuce": 4, "plate": 5, "knife": 6, "delivery": 7, "onion": 8
+            for cell_type in [3, 4, 5, 5, 6, 6, 7, 8]:
+                while True:
+                    index = np.random.choice(range(len(counter_indices)))
+                    c_index = counter_indices[index]
+                    if map[c_index[0]][c_index[1]] == 1:
+                        break
+                map[c_index[0]][c_index[1]] = cell_type
+
+            for cell_type in [2, 2, 2]:
+                while True:
+                    index = np.random.choice(range(len(space_indices)))
+                    s_index = space_indices[index]
+                    if map[s_index[0]][s_index[1]] == 0:
+                        break
+                map[s_index[0]][s_index[1]] = cell_type
+
         try: 
             return map
         except:
             raise Exception(f"Map not properly initialized. mapType: {self.mapType}, n_agents: {self.n_agents}")
-            
-
+        
+    def _value_in_4_connectivity(self, map, i, j, value):
+        shape = np.array(map).shape
+        for k in range(max(0, i - 1), min(shape[0] - 1, i + 1) + 1):
+                if map[k][j] == value:
+                    return True
+        for l in range(max(0, j - 1), min(shape[1] - 1, j + 1) + 1):
+                if map[i][l] == value:
+                    return True
+        return False
     
     def _map_3x5(self):
         if self.n_agents == 2:
@@ -755,16 +782,8 @@ class Overcooked_multi(MultiAgentEnv):
         if self.debug:
             print(f"recipe: {self.task}")
         self.oneHotTask = [1 if t in self.task else 0 for t in TASKLIST]
-        # TODO: when we use a human with a rational policy, we can start to vary the map type
-        #self.mapType = np.random.choice(['A', 'B', 'C'])
-        #self.initMap = self._initialize_map()
-        
-        if self.multi_map:
-            self.mapType = self.mapType_list[np.random.randint(0, len(self.mapType_list))]
-            self.initMap = self._initialize_map()
-            if self.debug:
-                print(f"map type updated to {self.mapType}")
-        
+        self.initMap = self._initialize_map()
+                
         self.map = copy.deepcopy(self.initMap)
         self._createItems()
         self.step_count = 0
