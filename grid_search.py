@@ -83,7 +83,7 @@ def define_training(centralized, human_policy, policies_to_train):
             # Key parameters for grid search
             #param=tune.grid_search([1, 2, 3]),
             # Fixed parameters
-            lr=tune.grid_search([3e-3, 5e-3, 1e-2]),
+            lr=tune.grid_search([3e-3, 5e-3]),
             vf_loss_coeff=0.2,
             grad_clip=0.5, 
             gamma=0.99,
@@ -152,12 +152,17 @@ def train(args, config):
     tuner = tune.Tuner(
         "PPO",
         param_space=config,
+        tune_config=tune.TuneConfig(
+            metric="env_runners/episode_return_mean",
+            mode="min",
+            num_samples=3
+        ),
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
             stop={
                 "training_iteration": 500,
-                "env_runners/episode_return_mean": 200,  # Stop if we reach target reward
+                "env_runners/episode_return_mean": 250,  # Stop if we reach target reward
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
