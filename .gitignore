@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+
 # C extensions
 *.so
 
@@ -115,3 +116,9 @@ wandb/
 .idea/
 *.out
 output.csv
+*.sh
+*.err
+
+# files
+train_rllib_human.py
+
