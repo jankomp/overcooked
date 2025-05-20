@@ -53,6 +53,8 @@ def define_agents(args):
         human_policy = RLModuleSpec(module_class=RandomRLM)
     elif args.rl_module == 'learned':
         human_policy = RLModuleSpec()
+        policies_to_train = ['ai', 'human'] if args.centralized else ['ai1', 'ai2', 'human']
+        return human_policy, policies_to_train
     else:
         raise NotImplementedError(f"{args.rl_module} not a valid human agent")
     
@@ -86,12 +88,12 @@ def define_training(centralized, human_policy, policies_to_train):
             vf_loss_coeff=0.2,
             grad_clip=0.5,
             num_epochs=10,
-            minibatch_size=128,
+            minibatch_size=512,
         )
     )
 
     model_config = DefaultModelConfig()
-    model_config.fcnet_hiddens = [256, 256] # hidden layers
+    model_config.fcnet_hiddens = [64, 64, 64] # hidden layers
     model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
     #model_config.use_lstm = True # use LSTM so we have memory
     #model_config.lstm_cell_size = 128 
