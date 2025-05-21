@@ -80,7 +80,7 @@ def define_training(centralized, human_policy, policies_to_train):
         .training( # these are hyper paramters for PPO
             use_critic=True,
             use_gae=True,
-            lr=5e-3 if centralized else 3e-3,
+            lr=3e-3,
             lambda_=0.95,
             gamma=0.99,
             clip_param=0.2,
@@ -88,7 +88,7 @@ def define_training(centralized, human_policy, policies_to_train):
             vf_loss_coeff=0.2,
             grad_clip=0.5,
             num_epochs=10,
-            minibatch_size=512 if centralized else 2048,
+            minibatch_size=2048,
         )
     )
 

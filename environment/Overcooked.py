@@ -153,7 +153,7 @@ class Overcooked_multi(MultiAgentEnv):
             counter_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 1 and self. _value_in_4_connectivity(map, row, col, 0)]
             space_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 0]
             # "space": 0, "counter": 1, "agent": 2, "tomato": 3, "lettuce": 4, "plate": 5, "knife": 6, "delivery": 7, "onion": 8
-            for cell_type in [3, 4, 5, 5, 6, 6, 7, 8]:
+            for cell_type in [ITEMIDX['tomato'], ITEMIDX['lettuce'], ITEMIDX['plate'], ITEMIDX['plate'], ITEMIDX['knife'], ITEMIDX['knife'], ITEMIDX['delivery'], ITEMIDX['onion']]:
                 while True:
                     index = np.random.choice(range(len(counter_indices)))
                     c_index = counter_indices[index]
@@ -161,7 +161,7 @@ class Overcooked_multi(MultiAgentEnv):
                         break
                 map[c_index[0]][c_index[1]] = cell_type
 
-            for cell_type in [2, 2, 2]:
+            for cell_type in [ITEMIDX['agent']] * self.n_agents:
                 while True:
                     index = np.random.choice(range(len(space_indices)))
                     s_index = space_indices[index]
@@ -545,8 +545,9 @@ class Overcooked_multi(MultiAgentEnv):
                 if self.centralized:
                     obs = {"ai": np.array(vec_obs[:-1]).flatten(), "human": np.array(vec_obs[-1])}
                     return obs
-                else:                    
-                    return {agent: np.asarray(self._get_vector_state()[i], dtype=np.float64) for i, agent in enumerate(self.agents)}
+                else:       
+                    obs = {agent: np.asarray(vec_obs[i], dtype=np.float64) for i, agent in enumerate(self.agents)}           
+                    return obs
             elif self.mode == "image":
                 return self._get_image_state()
 
@@ -672,6 +673,8 @@ class Overcooked_multi(MultiAgentEnv):
                                 [1, 0, 0, 0, 0, 0, 0, 0, 1],
                                 [1, 1, 1, 1, 1, 1, 1, 1, 1]]
 
+            # add current agent's position to observation
+            obs.extend([agent.x / self.xlen, agent.y / self.ylen])
             for item in self.itemList:
                 # Check if the item is within the agent's observation radius or if the radius is 0 (full observability)
                 if (agent.x - self.obs_radius <= item.x <= agent.x + self.obs_radius and
