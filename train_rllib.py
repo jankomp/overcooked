@@ -14,11 +14,11 @@ import os
 
 def define_env(centralized):
     reward_config = {
-        "metatask failed": -5,
+        "metatask failed": -1,
         "pretask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
-        "wrong delivery": -50,
+        "wrong delivery": -5,
         "step penalty": -0.5,
         "right step": 0.5,
     }
@@ -80,7 +80,7 @@ def define_training(centralized, human_policy, policies_to_train):
         .training( # these are hyper paramters for PPO
             use_critic=True,
             use_gae=True,
-            lr=3e-3,
+            lr=1e-3,
             lambda_=0.95,
             gamma=0.99,
             clip_param=0.2,
@@ -149,11 +149,11 @@ def train(args, config):
     tuner = tune.Tuner(
         "PPO",
         param_space=config,
-        tune_config=tune.TuneConfig(
-            metric="env_runners/episode_return_mean",
-            mode="max",
-            num_samples=3
-        ),
+        #tune_config=tune.TuneConfig(
+        #    metric="env_runners/episode_return_mean",
+        #    mode="max",
+        #    num_samples=3
+        #),
         run_config=RunConfig(
             storage_path=storage_path,
             name=experiment_name,
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
-    parser.add_argument("--rl_module", default="stationary", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
+    parser.add_argument("--rl_module", default="learned", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
 
     args = parser.parse_args()
