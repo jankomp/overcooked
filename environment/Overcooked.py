@@ -679,6 +679,10 @@ class Overcooked_multi(MultiAgentEnv):
                 # Check if the item is within the agent's observation radius or if the radius is 0 (full observability)
                 if (agent.x - self.obs_radius <= item.x <= agent.x + self.obs_radius and
                     agent.y - self.obs_radius <= item.y <= agent.y + self.obs_radius) or self.obs_radius == 0:
+                    # skip current agent's position because it was already included above
+                    if isinstance(item, Agent):
+                        if item.color == agent.color:
+                            continue
                     # Normalize item position and add to observation
                     x = item.x / self.xlen
                     y = item.y / self.ylen
