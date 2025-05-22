@@ -844,7 +844,8 @@ class Overcooked_multi(MultiAgentEnv):
     
     def _calc_item_distances(self):
         improvement = 0
-        for food_name in ['tomato', 'lettuce', 'onion']:
+        foods = ['tomato', 'lettuce', 'onion']
+        for food_name in foods:
             if food_name in self.task:
                 new_tomato_dist = self.foods_distances[food_name]
                 food = self.tomatoes if food_name == 'tomato' else []
@@ -856,7 +857,7 @@ class Overcooked_multi(MultiAgentEnv):
                     distances = [self._distance_between(food_item, knife) for food_item in food for knife in self.knifes]
                 elif self.foods_stage[food_name] == 2:
                     distances = [self._distance_between(food_item, plate) for food_item in food for plate in self.plates]
-                elif self.foods_stage[food_name] == 3:
+                elif all([self.foods_stage[key] == 3 for key in self.foods_stage if key in self.task]):
                     distances = [self._distance_between(food_item, delivery) for food_item in food for delivery in self.deliveries]
                 else:
                     distances = [float('inf')]
@@ -1030,11 +1031,11 @@ class Overcooked_multi(MultiAgentEnv):
         elif target_name == "plate":
             if isinstance(item, Food) and item.chopped:
                 plate = self._findItem(tx, ty, target_name)
-                agent.putdown(tx, ty)
-                plate.contain(item)
-                self._set_on_plate(plate)
-                if self._food_in_task(item.rawName):
-                    self.reward += self.rewardList["subtask finished"]
+                if self._put_on_plate_if_allowed(item, plate):
+                    agent.putdown(tx, ty)
+                    self._set_on_plate(plate)
+                    if self._food_in_task(item.rawName):
+                        self.reward += self.rewardList["subtask finished"] * len(plate.containing)
             else:
                 self.reward += self.rewardList["metatask failed"]
 
@@ -1047,11 +1048,11 @@ class Overcooked_multi(MultiAgentEnv):
         elif target_name in ["tomato", "lettuce", "onion"]:
             food_item = self._findItem(tx, ty, target_name)
             if food_item.chopped and isinstance(item, Plate):
-                item.contain(food_item)
-                self.map[tx][ty] = ITEMIDX["counter"]
-                self._set_on_plate(item)
-                if self._food_in_task(food_item.rawName):
-                    self.reward += self.rewardList["subtask finished"]
+                if self._put_on_plate_if_allowed(food_item, item):
+                    self.map[tx][ty] = ITEMIDX["counter"]
+                    self._set_on_plate(item)
+                    if self._food_in_task(food_item.rawName):
+                        self.reward += self.rewardList["subtask finished"] * len(item.containing)
             else:
                 self.reward += self.rewardList["metatask failed"]
 
@@ -1076,11 +1077,11 @@ class Overcooked_multi(MultiAgentEnv):
         elif isinstance(knife.holding, Food) and isinstance(agent.holding, Plate):
             item = knife.holding
             if item.chopped:
-                if self._food_in_task(item.rawName):
-                    self.reward += self.rewardList["subtask finished"]
-                knife.release()
-                self._set_on_plate(agent.holding)
-                agent.holding.contain(item)
+                if self._put_on_plate_if_allowed(item, agent.holding):
+                    if self._food_in_task(item.rawName):
+                        self.reward += self.rewardList["subtask finished"]
+                    knife.release()
+                    self._set_on_plate(agent.holding)
             else:
                 # Penalty for placing unchopped food on a plate
                 self.reward += self.rewardList["metatask failed"]
@@ -1092,12 +1093,12 @@ class Overcooked_multi(MultiAgentEnv):
             plate_item = knife.holding
             food_item = agent.holding
             if food_item.chopped:
-                if self._food_in_task(food_item.rawName):
-                    self.reward += self.rewardList["subtask finished"]
-                knife.release()
-                agent.pickup(plate_item)
-                self._set_on_plate(plate_item)
-                agent.holding.contain(food_item)
+                if self._put_on_plate_if_allowed(food_item, agent.holding):
+                    if self._food_in_task(food_item.rawName):
+                        self.reward += self.rewardList["subtask finished"]
+                    knife.release()
+                    agent.pickup(plate_item)
+                    self._set_on_plate(plate_item)
             else:
                 # Penalty for placing unchopped food on a plate
                 self.reward += self.rewardList["metatask failed"]
@@ -1143,12 +1144,7 @@ class Overcooked_multi(MultiAgentEnv):
             self.reward += self.rewardList["wrong delivery"]
 
         agent.putdown(tx, ty)
-        for f in plate.containing:
-            f.refresh()
-            self.map[f.x][f.y] = ITEMIDX[f.rawName]
-        plate.release()
-        plate.refresh()
-        self.map[plate.x][plate.y] = ITEMIDX[plate.name]
+        self._reset_wrong_delivery(plate)
 
         if self._check_task_completion():
             self.reward += self.rewardList["correct delivery"]
@@ -1159,11 +1155,27 @@ class Overcooked_multi(MultiAgentEnv):
         self.reward += self.rewardList["wrong delivery"]
         agent.putdown(tx, ty)
         if isinstance(item, Plate):
-            item.refresh()
-            self.map[item.x][item.y] = ITEMIDX[item.name]
+            self._reset_wrong_delivery(item)
         elif isinstance(item, Food):
             item.refresh()
             self.map[item.x][item.y] = ITEMIDX[item.rawName]
+
+    def _reset_wrong_delivery(self, plate):
+        plate.refresh()
+        self.map[plate.x][plate.y] = ITEMIDX[plate.name]
+
+    def _put_on_plate_if_allowed(self, food, plate):
+        other_plate = None
+        for item in self.itemDic['plate']:
+            if item.x != plate.x and item.y != plate.y:
+                other_plate = item
+
+        # if there is no other plate, the other plate contains no food, or the other plate contains no food of the task, we can safely put the food on the plate
+        if (other_plate is None) or (not other_plate.containing) or not any([food for food in other_plate.containing if food.rawName in self.task]):
+            plate.contain(food)
+            return True
+        # if the other plate contains food from our task, we can not put the food on this plate
+        return False
 
     def render(self, mode='human'):
         # TODO: handle mode = 'rgb_array and save the episode to gif
