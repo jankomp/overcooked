@@ -39,13 +39,13 @@ class Player:
     }
 
     REWARD_LIST = {
-        "metatask failed": -5,
+        "metatask failed": -1,
         "pretask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
-        "wrong delivery": -50,
+        "wrong delivery": -5,
         "step penalty": -0.5,
-        "right step": 1,
+        "right step": 0.5,
     }
 
     def __init__(self, args):
@@ -61,14 +61,20 @@ class Player:
             'centralized': args['centralized'],
         }
         self.env = Overcooked_multi(**self.env_params)
+        self.centralized = args['centralized']
 
         if args['agent'] == 'stationary':
-
-            self.agent = AlwaysStationaryRLM(
-                observation_space=self.env.observation_spaces['ai'],
-                action_space=self.env.action_spaces['ai'],
-                inference_only=True
-            )
+            assert(not args['centralized'])
+            self.agent = [AlwaysStationaryRLM(
+                                observation_space=self.env.observation_spaces['ai1'],
+                                action_space=self.env.action_spaces['ai1'],
+                                inference_only=True
+                            ),
+                            AlwaysStationaryRLM(
+                                    observation_space=self.env.observation_spaces['ai2'],
+                                    action_space=self.env.action_spaces['ai2'],
+                                    inference_only=True
+                                )]
 
         elif args['agent'] == 'random':
             self.agent = RandomRLM(
@@ -82,7 +88,6 @@ class Player:
 
         elif args['agent'] == 'learned':
             self.agent = self.load_ai_modules(args['save_dir'], args['name'], args['rl_module'], args['centralized'])
-            self.centralized = args['centralized']
         else:
             raise NotImplementedError(f'{args['agent']} is unknonw')
 
