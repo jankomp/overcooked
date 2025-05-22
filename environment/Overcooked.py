@@ -1093,7 +1093,7 @@ class Overcooked_multi(MultiAgentEnv):
             plate_item = knife.holding
             food_item = agent.holding
             if food_item.chopped:
-                if self._put_on_plate_if_allowed(food_item, agent.holding):
+                if self._put_on_plate_if_allowed(food_item, plate_item):
                     if self._food_in_task(food_item.rawName):
                         self.reward += self.rewardList["subtask finished"]
                     knife.release()
