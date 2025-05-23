@@ -8,6 +8,7 @@ from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
 from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.callbacks.callbacks import RLlibCallback
 from Agents import AlwaysStationaryRLM, RandomRLM
 import os
 
@@ -33,6 +34,8 @@ def define_env(centralized):
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
         "max_episode_length": 100,
+        "randomize_items": False,
+        "randomize_agents": False,
     }
 
     register_env(
@@ -73,14 +76,14 @@ def define_training(centralized, human_policy, policies_to_train):
         )
         .environment("Overcooked")
         .env_runners( # define how many envs to run in parallel and resources per env
-            num_envs_per_env_runner=1,
-            num_cpus_per_env_runner=1,
+            num_envs_per_env_runner=2,
+            num_cpus_per_env_runner=4,
             num_gpus_per_env_runner=0
         )
         .training( # these are hyper paramters for PPO
             use_critic=True,
             use_gae=True,
-            lr=1e-3,
+            lr=5e-3,
             lambda_=0.95,
             gamma=0.99,
             clip_param=0.2,

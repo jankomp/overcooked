@@ -59,6 +59,7 @@ class Player:
             "n_players": 3,
             'debug': args['debug'],
             'centralized': args['centralized'],
+            "max_episode_length": 100,
         }
         self.env = Overcooked_multi(**self.env_params)
         self.centralized = args['centralized']
@@ -247,7 +248,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, default="vector", help='The type of observation (vector/image)')
     parser.add_argument('--debug', type=bool, default=True, help='Whether to print debug information and render')
 
-    parser.add_argument('--agent', type=str, default='learned', help='Human, stationary, random, or learned')
+    parser.add_argument('--agent', type=str, default='stationary', help='Human, stationary, random, or learned')
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="learned", type=str)

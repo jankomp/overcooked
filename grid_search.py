@@ -25,7 +25,7 @@ def define_env(centralized):
     env_params = {
         "centralized": centralized,
         "grid_dim": [5, 5],
-        "task": "tomato salad",
+        "task": "lettuce-onion-tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
         "mode": "vector",
@@ -83,15 +83,16 @@ def define_training(centralized, human_policy, policies_to_train):
             # Key parameters for grid search
             #param=tune.grid_search([1, 2, 3]),
             # Fixed parameters
-            lr=tune.grid_search([3e-3, 5e-3]),
+            lr=tune.grid_search([1e-3, 3e-3, 5e-3]),
             vf_loss_coeff=0.2,
             grad_clip=0.5, 
+            vf_clip_param=tune.grid_search([0.1, 0.8]),
             gamma=0.99,
-            entropy_coeff=0.03,
+            entropy_coeff=tune.grid_search([0.1, 0.3]),
             clip_param=0.2,
-            lambda_=0.95,
+            lambda_=tune.grid_search([0.2, 0.5, 0.95]),
             num_epochs=10,
-            minibatch_size=tune.grid_search([512, 1024, 2048]),
+            minibatch_size=2048,
         )
     )
 
