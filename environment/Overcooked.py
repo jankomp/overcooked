@@ -15,7 +15,7 @@ TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato sala
 
 class Overcooked_multi(MultiAgentEnv):
 
-    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, randomize_items=False, randomize_agents=False):
+    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, randomize_items=False, randomize_agents=False, ind_reward=False):
         super().__init__()
         self.step_count = 0
         self.centralized = centralized
@@ -43,6 +43,7 @@ class Overcooked_multi(MultiAgentEnv):
         self.randomize_agents = randomize_agents
 
         self.reward = None
+        self.ind_reward = ind_reward
 
         self.initMap = self._initialize_map()
         self.map = copy.deepcopy(self.initMap)
@@ -808,7 +809,12 @@ class Overcooked_multi(MultiAgentEnv):
         # for denser reward signal
         # 0 = to pick, 1 = to chop, 2 = to put on plate, 3 = to deliver
         self.foods_stage = {'tomato': 0, 'lettuce': 0, 'onion': 0}
-        self.foods_distances = {'tomato': float('inf'), 'lettuce': float('inf'), 'onion': float('inf')}
+        if self.ind_reward:
+            self.foods_distances = {(food_name, agent_name): float('inf') 
+                                  for food_name in ['tomato', 'lettuce', 'onion']
+                                  for agent_name in self.players}
+        else:
+            self.foods_distances = {'tomato': float('inf'), 'lettuce': float('inf'), 'onion': float('inf')}
         self._calc_item_distances()
 
         # Reset task completion status
@@ -824,7 +830,10 @@ class Overcooked_multi(MultiAgentEnv):
 
         action_list = [action[key] for key in action]
         self.step_count += 1
-        self.reward = self.rewardList["step penalty"]
+        if self.ind_reward:
+            self.reward = {agent: self.rewardList["step penalty"] for agent in self.players}
+        else:
+            self.reward = self.rewardList["step penalty"]
         done = False
 
         self._reset_agent_movement_flags()
@@ -839,12 +848,24 @@ class Overcooked_multi(MultiAgentEnv):
                     continue
                 self._execute_agent_action(agent, action_list, idx)
 
-        self.reward += self._calc_item_distances() * self.rewardList['right step']
+        if self.ind_reward:
+            improvements = self._calc_item_distances()
+            for agent in self.players:
+                self.reward[agent] += improvements[agent] * self.rewardList['right step']
+        else:
+            self.reward += self._calc_item_distances() * self.rewardList['right step']
 
         done = done or self._check_task_completion()
         terminateds = {"__all__": done or self.step_count >= self.max_episode_length}
-        rewards = {agent: self.reward for agent in self.agents}
-        infos = {agent: info for agent in self.agents}
+        if self.ind_reward:
+            rewards = {agent: self.reward[agent] for agent in self.players}
+        else:
+            rewards = {agent: self.reward for agent in self.players}
+        if self.centralized:
+            # compute ai mean reward
+            ai_mean_reward = sum(self.reward[agent] for agent in self.players[:-1]) / len(self.players[:-1])
+            rewards = {'human': self.reward['human'], 'ai': ai_mean_reward}
+        infos = {agent: info for agent in self.players}
         truncated = False
 
         if self.debug:
@@ -853,29 +874,83 @@ class Overcooked_multi(MultiAgentEnv):
         return self._get_obs(), rewards, terminateds, {'__all__': truncated}, infos
     
     def _calc_item_distances(self):
-        improvement = 0
-        foods = ['tomato', 'lettuce', 'onion']
-        for food_name in foods:
-            if food_name in self.task:
-                new_tomato_dist = self.foods_distances[food_name]
+        if self.ind_reward:
+            agent_improvements = {agent: 0 for agent in self.players}
+            foods = ['tomato', 'lettuce', 'onion']
+            
+            for food_name in foods:
+                if food_name not in self.task:
+                    continue
+
                 food = self.tomatoes if food_name == 'tomato' else []
                 food = self.lettuces if food_name == 'lettuce' else food
                 food = self.onions if food_name == 'onion' else food
-                if self.foods_stage[food_name] == 0:
-                    distances = [self._distance_between(food_item, agent) for food_item in food for agent in self.agent]
-                elif self.foods_stage[food_name] == 1:
-                    distances = [self._distance_between(food_item, knife) for food_item in food for knife in self.knifes]
-                elif self.foods_stage[food_name] == 2:
-                    distances = [self._distance_between(food_item, plate) for food_item in food for plate in self.plates]
-                elif all([self.foods_stage[key] == 3 for key in self.foods_stage if key in self.task]):
-                    distances = [self._distance_between(food_item, delivery) for food_item in food for delivery in self.deliveries]
-                else:
-                    distances = [float('inf')]
-                new_tomato_dist = min(min(distances), new_tomato_dist)
-                new_improvement = max(0, self.foods_distances[food_name] - new_tomato_dist)
-                improvement += new_improvement if new_improvement < 10 else 0
-                self.foods_distances[food_name] = new_tomato_dist
-        return improvement
+                
+                for i, agent in enumerate(self.agent):
+                    agent_dist = float('inf')
+                    
+                    if self.foods_stage[food_name] == 0:
+                        for food_item in food:
+                            dist = self._distance_between(food_item, agent)
+                            agent_dist = min(agent_dist, dist)
+                            
+                    elif self.foods_stage[food_name] == 1:
+                        if (agent.holding and 
+                            isinstance(agent.holding, Food) and 
+                            agent.holding.rawName == food_name):
+                            for knife in self.knifes: 
+                                dist = self._distance_between(agent, knife)
+                                agent_dist = min(agent_dist, dist)
+                                
+                    elif self.foods_stage[food_name] == 2:
+                        if (agent.holding and 
+                            isinstance(agent.holding, Food) and 
+                            agent.holding.rawName == food_name and 
+                            agent.holding.chopped):
+                            for plate in self.plates:
+                                dist = self._distance_between(agent, plate)
+                                agent_dist = min(agent_dist, dist)
+                                
+                    elif all([self.foods_stage[key] == 3 for key in self.foods_stage if key in self.task]):
+             
+                        if (agent.holding and 
+                            isinstance(agent.holding, Plate) and 
+                            agent.holding.containing):
+                            for delivery in self.deliveries:
+                                dist = self._distance_between(agent, delivery)
+                                agent_dist = min(agent_dist, dist)
+                    
+                    old_dist = self.foods_distances.get((food_name, self.players[i]), float('inf'))
+                    if agent_dist < old_dist:
+                        improvement = old_dist - agent_dist
+                        agent_improvements[self.players[i]] += improvement if improvement < 10 else 0
+                        self.foods_distances[(food_name, self.players[i])] = agent_dist
+                    
+            return agent_improvements
+        else:
+            improvement = 0
+            foods = ['tomato', 'lettuce', 'onion']
+            for food_name in foods:
+                if food_name in self.task:
+                    new_tomato_dist = self.foods_distances[food_name]
+                    food = self.tomatoes if food_name == 'tomato' else []
+                    food = self.lettuces if food_name == 'lettuce' else food
+                    food = self.onions if food_name == 'onion' else food
+                    if self.foods_stage[food_name] == 0:
+                        distances = [self._distance_between(food_item, agent) for food_item in food for agent in self.agent]
+                    elif self.foods_stage[food_name] == 1:
+                        distances = [self._distance_between(food_item, knife) for food_item in food for knife in self.knifes]
+                    elif self.foods_stage[food_name] == 2:
+                        distances = [self._distance_between(food_item, plate) for food_item in food for plate in self.plates]
+                    elif all([self.foods_stage[key] == 3 for key in self.foods_stage if key in self.task]):
+                        distances = [self._distance_between(food_item, delivery) for food_item in food for delivery in self.deliveries]
+                    else:
+                        distances = [float('inf')]
+                    new_tomato_dist = min(min(distances), new_tomato_dist)
+                    new_improvement = max(0, self.foods_distances[food_name] - new_tomato_dist)
+                    improvement += new_improvement if new_improvement < 10 else 0
+                    self.foods_distances[food_name] = new_tomato_dist
+            return improvement
     
     def _food_in_task(self, food_name):
         return str(food_name).lower() in str(self.task).lower()
@@ -981,11 +1056,17 @@ class Overcooked_multi(MultiAgentEnv):
                 else:
                     knife.holding.chop()
                     if self._food_in_task(knife.holding.rawName):
-                        self.reward += self.rewardList["pretask finished"]
-                    if knife.holding.chopped:
-                        self._set_chopped(knife)
-                        if self._food_in_task(knife.holding.rawName):
+                        if self.ind_reward:
+                            self.reward[self.players[agent.idx]] += self.rewardList["pretask finished"]
+                        else:
                             self.reward += self.rewardList["pretask finished"]
+                    if knife.holding.chopped:
+                        self._set_chopped(knife, agent)
+                        if self._food_in_task(knife.holding.rawName):
+                            if self.ind_reward:
+                                self.reward[self.players[agent.idx]] += self.rewardList["pretask finished"]
+                            else:
+                                self.reward += self.rewardList["pretask finished"]
 
     def _set_picked(self, agent):
         for food_name in ['tomato', 'lettuce', 'onion']:
@@ -998,9 +1079,12 @@ class Overcooked_multi(MultiAgentEnv):
                 continue
             self.foods_stage[food_name] = 1 if (isinstance(item, Food) and item.rawName == food_name) else self.foods_stage[food_name]
             if old_food_stage == 0 and self.foods_stage[food_name] == 1:
-                self.foods_distances[food_name] = float('inf')
+                if self.ind_reward:
+                    self.foods_distances[(food_name, agent)] = float('inf')
+                else:
+                    self.foods_distances[food_name] = float('inf')
 
-    def _set_chopped(self, knife):
+    def _set_chopped(self, knife, agent):
         for food_name in ['tomato', 'lettuce', 'onion']:
             if not knife or not knife.holding:
                 return
@@ -1011,9 +1095,12 @@ class Overcooked_multi(MultiAgentEnv):
                 continue
             self.foods_stage[food_name] = 2 if (isinstance(item, Food) and item.rawName == food_name) else self.foods_stage[food_name]
             if old_food_stage == 1 and self.foods_stage[food_name] == 2:
-                self.foods_distances[food_name] = float('inf')
+                if self.ind_reward:
+                    self.foods_distances[(food_name, agent)] = float('inf')
+                else:
+                    self.foods_distances[food_name] = float('inf')
 
-    def _set_on_plate(self, plate):
+    def _set_on_plate(self, plate, agent):
         for food_name in ['tomato', 'lettuce', 'onion']:
             if not plate or not plate.containing:
                 return
@@ -1023,11 +1110,19 @@ class Overcooked_multi(MultiAgentEnv):
                     continue
                 self.foods_stage[food_name] = 3 if (isinstance(item, Food) and item.rawName == food_name and item.chopped) else self.foods_stage[food_name]
                 if old_food_stage == 2 and self.foods_stage[food_name] == 3:
-                    self.foods_distances[food_name] = float('inf')
+                    if self.ind_reward:
+                        self.foods_distances[(food_name, agent)] = float('inf')
+                    else:
+                        self.foods_distances[food_name] = float('inf')
 
     def _set_delivered(self):
         self.foods_stage = {'tomato': 0, 'lettuce': 0, 'onion': 0}
-        self.foods_distances = {'tomato': float('inf'), 'lettuce': float('inf'), 'onion': float('inf')}
+        if self.ind_reward:
+            self.foods_distances = {(food_name, agent_name): float('inf') 
+                                  for food_name in ['tomato', 'lettuce', 'onion']
+                                  for agent_name in self.players}
+        else:
+            self.foods_distances = {'tomato': float('inf'), 'lettuce': float('inf'), 'onion': float('inf')}
 
     def _try_putdown(self, agent, tx, ty, target_name):
         item = agent.holding
@@ -1036,18 +1131,27 @@ class Overcooked_multi(MultiAgentEnv):
             if item.rawName in ["tomato", "lettuce", "onion", "plate"]:
                 self.map[tx][ty] = ITEMIDX[item.rawName]
             agent.putdown(tx, ty)
-            self.reward += self.rewardList["metatask failed"]
+            if self.ind_reward:
+                self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+            else:
+                self.reward += self.rewardList["metatask failed"]
 
         elif target_name == "plate":
             if isinstance(item, Food) and item.chopped:
                 plate = self._findItem(tx, ty, target_name)
                 if self._put_on_plate_if_allowed(item, plate):
                     agent.putdown(tx, ty)
-                    self._set_on_plate(plate)
+                    self._set_on_plate(plate, agent)
                     if self._food_in_task(item.rawName):
-                        self.reward += self.rewardList["subtask finished"] * len(plate.containing)
+                        if self.ind_reward:
+                            self.reward[self.players[agent.idx]] += self.rewardList["subtask finished"] * len(plate.containing)
+                        else:
+                            self.reward += self.rewardList["subtask finished"] * len(plate.containing)
             else:
-                self.reward += self.rewardList["metatask failed"]
+                if self.ind_reward:
+                    self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+                else:
+                    self.reward += self.rewardList["metatask failed"]
 
         elif target_name == "knife":
             self._handle_putdown_on_knife(agent, tx, ty, target_name)
@@ -1060,11 +1164,17 @@ class Overcooked_multi(MultiAgentEnv):
             if food_item.chopped and isinstance(item, Plate):
                 if self._put_on_plate_if_allowed(food_item, item):
                     self.map[tx][ty] = ITEMIDX["counter"]
-                    self._set_on_plate(item)
+                    self._set_on_plate(item, agent)
                     if self._food_in_task(food_item.rawName):
-                        self.reward += self.rewardList["subtask finished"] * len(item.containing)
+                        if self.ind_reward:
+                            self.reward[self.players[agent.idx]] += self.rewardList["subtask finished"] * len(item.containing)
+                        else:
+                            self.reward += self.rewardList["subtask finished"] * len(item.containing)
             else:
-                self.reward += self.rewardList["metatask failed"]
+                if self.ind_reward:
+                    self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+                else:
+                    self.reward += self.rewardList["metatask failed"]
 
     def _handle_putdown_on_knife(self, agent, tx, ty, target_name):
         knife = self._findItem(tx, ty, target_name)
@@ -1076,28 +1186,46 @@ class Overcooked_multi(MultiAgentEnv):
             if isinstance(item, Food):
                 if item.chopped:
                     # Penalty for placing chopped food back on the knife
-                    self.reward += self.rewardList["metatask failed"]
+                    if self.ind_reward:
+                        self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+                    else:
+                        self.reward += self.rewardList["metatask failed"]
                 else:
                     # Reward for placing unchopped food on the knife
                     if self._food_in_task(knife.holding.rawName):
-                        self.reward += self.rewardList["pretask finished"]
+                        if self.ind_reward:
+                            self.reward[self.players[agent.idx]] += self.rewardList["pretask finished"]
+                        else:
+                            self.reward += self.rewardList["pretask finished"]
             else:
-                self.reward += self.rewardList["metatask failed"]
+                if self.ind_reward:
+                    self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]    
+                else:
+                    self.reward += self.rewardList["metatask failed"]
         # If the knife is holding food and the agent is holding a plate, place the food on the plate
         elif isinstance(knife.holding, Food) and isinstance(agent.holding, Plate):
             item = knife.holding
             if item.chopped:
                 if self._put_on_plate_if_allowed(item, agent.holding):
                     if self._food_in_task(item.rawName):
-                        self.reward += self.rewardList["subtask finished"]
+                        if self.ind_reward:
+                            self.reward[self.players[agent.idx]] += self.rewardList["subtask finished"]
+                        else:
+                            self.reward += self.rewardList["subtask finished"]
                     knife.release()
-                    self._set_on_plate(agent.holding)
+                    self._set_on_plate(agent.holding, agent)
             else:
                 # Penalty for placing unchopped food on a plate
-                self.reward += self.rewardList["metatask failed"]
+                if self.ind_reward:
+                    self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+                else:
+                    self.reward += self.rewardList["metatask failed"]
         elif isinstance(knife.holding, Food) and not isinstance(agent.holding, Plate):
             # Penalty for holding food while the knife is holding food
-            self.reward += self.rewardList["metatask failed"]
+            if self.ind_reward:
+                self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+            else:
+                self.reward += self.rewardList["metatask failed"]
         # If the knife is holding a plate and the agent is holding food, place the food on the plate
         elif isinstance(knife.holding, Plate) and isinstance(agent.holding, Food):
             plate_item = knife.holding
@@ -1105,16 +1233,25 @@ class Overcooked_multi(MultiAgentEnv):
             if food_item.chopped:
                 if self._put_on_plate_if_allowed(food_item, plate_item):
                     if self._food_in_task(food_item.rawName):
-                        self.reward += self.rewardList["subtask finished"]
+                        if self.ind_reward:
+                            self.reward[self.players[agent.idx]] += self.rewardList["subtask finished"]
+                        else:
+                            self.reward += self.rewardList["subtask finished"]
                     knife.release()
                     agent.pickup(plate_item)
-                    self._set_on_plate(plate_item)
+                    self._set_on_plate(plate_item, agent)
             else:
                 # Penalty for placing unchopped food on a plate
-                self.reward += self.rewardList["metatask failed"]
+                if self.ind_reward:
+                    self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+                else:
+                    self.reward += self.rewardList["metatask failed"]
         elif isinstance(knife.holding, Plate) and isinstance(agent.holding, Plate):
             # Penalty for holding a plate while the knife is holding a plate
-            self.reward += self.rewardList["metatask failed"]
+            if self.ind_reward:
+                self.reward[self.players[agent.idx]] += self.rewardList["metatask failed"]
+            else:
+                self.reward += self.rewardList["metatask failed"]
 
     def _handle_delivery(self, agent, tx, ty):
         item = agent.holding
@@ -1148,21 +1285,37 @@ class Overcooked_multi(MultiAgentEnv):
         idx = TASKLIST.index(dish_name)
         if self.taskCompletionStatus[idx] > 0:
             self.taskCompletionStatus[idx] -= 1
-            self.reward += self.rewardList["correct delivery"]
+            if self.ind_reward:
+                for agent_name in self.players:
+                    self.reward[agent_name] += self.rewardList["correct delivery"]
+            else:
+                self.reward += self.rewardList["correct delivery"]
             self._set_delivered()
         else:
-            self.reward += self.rewardList["wrong delivery"]
+            if self.ind_reward:
+                for agent_name in self.players:
+                    self.reward[agent_name] += self.rewardList["wrong delivery"]
+            else:
+                self.reward += self.rewardList["wrong delivery"]
 
         agent.putdown(tx, ty)
         self._reset_wrong_delivery(plate)
 
         if self._check_task_completion():
-            self.reward += self.rewardList["correct delivery"]
+            if self.ind_reward:
+                for agent_name in self.players:
+                    self.reward[agent_name] += self.rewardList["correct delivery"]
+            else:
+                self.reward += self.rewardList["correct delivery"]
             self._set_delivered()
             self.done = True
 
     def _fail_delivery(self, agent, item, tx, ty):
-        self.reward += self.rewardList["wrong delivery"]
+        if self.ind_reward:
+            for agent_name in self.players:
+                self.reward[agent_name] += self.rewardList["wrong delivery"]
+        else:
+            self.reward += self.rewardList["wrong delivery"]
         agent.putdown(tx, ty)
         if isinstance(item, Plate):
             self._reset_wrong_delivery(item)

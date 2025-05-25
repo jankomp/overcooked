@@ -22,7 +22,7 @@ from ray.rllib.utils.metrics import (
 
 env_params = {}
 
-def define_env(centralized):
+def define_env(args):
     reward_config = {
         "metatask failed": -1,
         "pretask finished": 5,
@@ -33,18 +33,19 @@ def define_env(centralized):
         "right step": 0.5,
     }
     env_params = {
-        "centralized": centralized,
+        "centralized": args.centralized,
         "grid_dim": [5, 5],
         "task": "lettuce-onion-tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
         "mode": "vector",
         "debug": False,
-        "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
+        "agents": ['ai', 'human'] if args.centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
         "max_episode_length": 100,
         "randomize_items": False,
         "randomize_agents": False,
+        "ind_reward": args.ind_reward,
     }
 
     register_env(
@@ -141,8 +142,8 @@ def define_training(centralized, human_policy, policies_to_train):
         .environment("Overcooked")
         .env_runners( # define how many envs to run in parallel and resources per env
             num_envs_per_env_runner=2,
-            num_cpus_per_env_runner=4,
-            num_gpus_per_env_runner=0
+            num_cpus_per_env_runner=8,
+            num_gpus_per_env_runner=1
         )
         .training( # these are hyper paramters for PPO
             use_critic=True,
@@ -234,7 +235,7 @@ def train(args, config):
     tuner.fit()
 
 def main(args):
-    define_env(args.centralized)
+    define_env(args)
     human_policy, policies_to_train = define_agents(args)
     config = define_training(args.centralized, human_policy, policies_to_train)
     train(args, config)
@@ -247,6 +248,7 @@ if __name__ == "__main__":
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="learned", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
+    parser.add_argument("--ind_reward", action="store_false", help="True for individual reward, False for shared reward")
 
     args = parser.parse_args()
 
