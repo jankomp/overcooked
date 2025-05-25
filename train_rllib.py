@@ -11,7 +11,16 @@ from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.callbacks.callbacks import RLlibCallback
 from Agents import AlwaysStationaryRLM, RandomRLM
 import os
+from functools import partial
+from ray.rllib.algorithms.algorithm import Algorithm
+from ray.rllib.callbacks.callbacks import RLlibCallback
+from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
+from ray.rllib.utils.metrics import (
+    ENV_RUNNER_RESULTS,
+    EPISODE_RETURN_MEAN,
+)
 
+env_params = {}
 
 def define_env(centralized):
     reward_config = {
@@ -64,12 +73,67 @@ def define_agents(args):
     policies_to_train = ['ai'] if args.centralized else ['ai1', 'ai2']
     return human_policy, policies_to_train
 
+def _remote_fn(env_runner, randomize_items, randomize_agents):
+    # We recreate the entire env object by changing the env_config on the worker,
+    # then calling its `make_env()` method.
+    env_params['randomize_items'] = randomize_items
+    env_params['randomize_agents'] = randomize_agents
+    env_runner.config.environment(env_config=env_params)
+    env_runner.make_env()
+
+class EnvRandomizationCallback(RLlibCallback):
+    """Custom callback implementing `on_train_result()` for changing the envs' maps."""
+
+    def on_train_result(
+        self,
+        *,
+        algorithm: Algorithm,
+        metrics_logger=None,
+        result: dict,
+        **kwargs,
+    ) -> None:
+        current_stage = 0
+        current_return = result[ENV_RUNNER_RESULTS][EPISODE_RETURN_MEAN]
+        if current_return > 100: # TODO: should threshold be 100, 200, or 300?
+            current_stage += 1
+            if current_stage == 1:
+                randomize_items = False
+                randomize_agents = True
+            elif current_stage == 2:
+                randomize_items = True
+                randomize_agents = False
+            elif current_stage == 3:
+                randomize_items = True
+                randomize_agents = True
+            else:
+                return
+            
+            print(
+                f"Switching ranomization on all EnvRunners to randomize_items={randomize_items}, randomize_agents={randomize_agents} (False, False=easiest, "
+                f"True, True=hardest), b/c R={current_return} on current task."
+            )
+            algorithm.env_runner_group.foreach_env_runner(
+                func=partial(_remote_fn, randomize_items=randomize_items, randomize_agents=randomize_agents)
+            )
+        # Emergency brake: If return is smaller than -100 AND we are already at a harder task (1, 2, or
+        # 3), we go back to stage=0.
+        elif current_return < -100 and current_stage > 0:
+            print(
+                "Emergency brake: Our policy seemed to have collapsed -> Setting task "
+                "back to 0."
+            )
+            algorithm.env_runner_group.foreach_env_runner(
+                func=partial(_remote_fn, randomize_items=False, randomize_agents=False)
+            )
+            current_stage = 0
+
 
 
 
 def define_training(centralized, human_policy, policies_to_train):
     config = (
         PPOConfig()
+        .callbacks(EnvRandomizationCallback)
         .api_stack( #reduce some warning.
             enable_rl_module_and_learner=True,
             enable_env_runner_and_connector_v2=True,
@@ -161,8 +225,8 @@ def train(args, config):
             storage_path=storage_path,
             name=experiment_name,
             stop={
-                "training_iteration": 1000,
-                #"env_runners/episode_return_mean": 250,
+                "training_iteration": 10_000,
+                "env_runners/episode_return_mean": 400,
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )

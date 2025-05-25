@@ -63,6 +63,7 @@ class Player:
         }
         self.env = Overcooked_multi(**self.env_params)
         self.centralized = args['centralized']
+        self.deterministic = args['deterministic']
 
         if args['agent'] == 'stationary':
             assert(not args['centralized'])
@@ -104,9 +105,15 @@ class Player:
 
             if action_space_shape is not None: # centralized control means one action per agent
                 logits = np.reshape(logits, action_space_shape)
-                action = [np.random.choice(list(range(len(agent_logits))), p=softmax(agent_logits)) for agent_logits in logits]
+                if self.deterministic:
+                    action = [np.argmax(agent_logits) for agent_logits in logits]
+                else:
+                    action = [np.random.choice(list(range(len(agent_logits))), p=softmax(agent_logits)) for agent_logits in logits]
             else:
-                action = np.random.choice(list(range(len(logits[0]))), p=softmax(logits[0]))
+                if self.deterministic:
+                    action = np.argmax(logits[0])
+                else:
+                    action = np.random.choice(list(range(len(logits[0]))), p=softmax(logits[0]))
             return action
         elif 'actions' in mdl_out:
             return mdl_out['actions'][0]
@@ -248,11 +255,12 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, default="vector", help='The type of observation (vector/image)')
     parser.add_argument('--debug', type=bool, default=True, help='Whether to print debug information and render')
 
-    parser.add_argument('--agent', type=str, default='stationary', help='Human, stationary, random, or learned')
+    parser.add_argument('--agent', type=str, default='learned', help='Human, stationary, random, or learned')
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="learned", type=str)
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
+    parser.add_argument("--deterministic", action="store_true", help="Deterministic actions?")
 
     params = vars(parser.parse_args())
 
