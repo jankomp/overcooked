@@ -859,13 +859,11 @@ class Overcooked_multi(MultiAgentEnv):
         terminateds = {"__all__": done or self.step_count >= self.max_episode_length}
         if self.ind_reward:
             rewards = {agent: self.reward[agent] for agent in self.players}
+            if self.centralized:
+                rewards = {'human': self.reward['human'], 'ai': sum(self.reward[agent] for agent in self.players[:-1]) / len(self.players[:-1])}
         else:
-            rewards = {agent: self.reward for agent in self.players}
-        if self.centralized:
-            # compute ai mean reward
-            ai_mean_reward = sum(self.reward[agent] for agent in self.players[:-1]) / len(self.players[:-1])
-            rewards = {'human': self.reward['human'], 'ai': ai_mean_reward}
-        infos = {agent: info for agent in self.players}
+            rewards = {agent: self.reward for agent in self.agents}
+        infos = {agent: info for agent in self.agents}
         truncated = False
 
         if self.debug:
