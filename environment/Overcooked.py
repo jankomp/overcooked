@@ -15,7 +15,7 @@ TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato sala
 
 class Overcooked_multi(MultiAgentEnv):
 
-    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False):
+    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, randomize_items=False, randomize_agents=False):
         super().__init__()
         self.step_count = 0
         self.centralized = centralized
@@ -39,6 +39,8 @@ class Overcooked_multi(MultiAgentEnv):
             self.mapType = map_type
         self.debug = debug
         self.mode = mode
+        self.randomize_items = randomize_items
+        self.randomize_agents = randomize_agents
 
         self.reward = None
 
@@ -153,17 +155,21 @@ class Overcooked_multi(MultiAgentEnv):
             counter_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 1 and self. _value_in_4_connectivity(map, row, col, 0)]
             space_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 0]
             # "space": 0, "counter": 1, "agent": 2, "tomato": 3, "lettuce": 4, "plate": 5, "knife": 6, "delivery": 7, "onion": 8
+            i = 0
             for cell_type in [ITEMIDX['tomato'], ITEMIDX['lettuce'], ITEMIDX['plate'], ITEMIDX['plate'], ITEMIDX['knife'], ITEMIDX['knife'], ITEMIDX['delivery'], ITEMIDX['onion']]:
                 while True:
-                    index = np.random.choice(range(len(counter_indices)))
+                    index = np.random.choice(range(len(counter_indices))) if self.randomize_items else i
+                    i += 1
                     c_index = counter_indices[index]
                     if map[c_index[0]][c_index[1]] == 1:
                         break
                 map[c_index[0]][c_index[1]] = cell_type
 
+            i = 0
             for cell_type in [ITEMIDX['agent']] * self.n_agents:
                 while True:
-                    index = np.random.choice(range(len(space_indices)))
+                    index = np.random.choice(range(len(space_indices))) if self.randomize_agents else i
+                    i += 1
                     s_index = space_indices[index]
                     if map[s_index[0]][s_index[1]] == 0:
                         break
@@ -174,6 +180,10 @@ class Overcooked_multi(MultiAgentEnv):
         except:
             raise Exception(f"Map not properly initialized. mapType: {self.mapType}, n_agents: {self.n_agents}")
         
+    def set_randomization(self, randomize_items, randomize_agents):
+        self.randomize_items = randomize_items
+        self.randomize_agents = randomize_agents
+
     def _value_in_4_connectivity(self, map, i, j, value):
         shape = np.array(map).shape
         for k in range(max(0, i - 1), min(shape[0] - 1, i + 1) + 1):
