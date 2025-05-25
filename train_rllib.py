@@ -248,7 +248,7 @@ if __name__ == "__main__":
     parser.add_argument("--name", default="run", type=str)
     parser.add_argument("--rl_module", default="learned", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
-    parser.add_argument("--ind_reward", action="store_false", help="True for individual reward, False for shared reward")
+    parser.add_argument("--ind_reward", action="store_true", help="True for individual reward, False for shared reward")
 
     args = parser.parse_args()
 
