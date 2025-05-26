@@ -121,4 +121,5 @@ output.csv
 
 # files
 train_rllib_human.py
+legacy/
 

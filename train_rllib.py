@@ -45,7 +45,9 @@ def define_env(args):
         "max_episode_length": 100,
         "randomize_items": False,
         "randomize_agents": False,
-        "ind_reward": args.ind_reward,
+        "ind_reward": args.ind_reward,  
+        "ind_distance": args.ind_distance,
+        "reward_distance": args.reward_distance,
     }
 
     register_env(
@@ -249,7 +251,8 @@ if __name__ == "__main__":
     parser.add_argument("--rl_module", default="learned", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
     parser.add_argument("--ind_reward", action="store_true", help="True for individual reward, False for shared reward")
-
+    parser.add_argument("--ind_distance", action="store_true", help="True for individual distance, False for shared distance")
+    parser.add_argument("--reward_distance", action="store_true", help="True for incorporating item distance into rewards, False for not")
     args = parser.parse_args()
 
     ip = main(args)
