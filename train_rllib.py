@@ -20,8 +20,6 @@ from ray.rllib.utils.metrics import (
     EPISODE_RETURN_MEAN,
 )
 
-env_params = {}
-
 def define_env(args):
     reward_config = {
         "metatask failed": -1,
@@ -32,7 +30,7 @@ def define_env(args):
         "step penalty": -0.5,
         "right step": 0.5,
     }
-    env_params = {
+    env_config = {
         "centralized": args.centralized,
         "grid_dim": [5, 5],
         "task": "lettuce-onion-tomato salad",
@@ -52,8 +50,10 @@ def define_env(args):
 
     register_env(
         "Overcooked",
-        lambda _: Overcooked_multi(**env_params),
+        lambda env_config: Overcooked_multi(**env_config),
     )
+
+    return env_config
 
 def define_agents(args):
     '''
@@ -79,9 +79,12 @@ def define_agents(args):
 def _remote_fn(env_runner, randomize_items, randomize_agents):
     # We recreate the entire env object by changing the env_config on the worker,
     # then calling its `make_env()` method.
-    env_params['randomize_items'] = randomize_items
-    env_params['randomize_agents'] = randomize_agents
-    env_runner.config.environment(env_config=env_params)
+    new_env_config = {
+        **env_runner.config.env_config,
+        "randomize_items": randomize_items,
+        "randomize_agents": randomize_agents,
+    }
+    env_runner.config.environment(env_config=new_env_config)
     env_runner.make_env()
 
 class EnvRandomizationCallback(RLlibCallback):
@@ -95,24 +98,30 @@ class EnvRandomizationCallback(RLlibCallback):
         result: dict,
         **kwargs,
     ) -> None:
-        current_stage = 0
+        current_stage = algorithm._counters.get("current_stage", 0)
+        new_stage = current_stage
+
+        result["current_stage"] = current_stage
         current_return = result[ENV_RUNNER_RESULTS][EPISODE_RETURN_MEAN]
+        #print("current_return", current_return)
         if current_return > 100: # TODO: should threshold be 100, 200, or 300?
-            current_stage += 1
-            if current_stage == 1:
+            new_stage = current_stage + 1
+            if new_stage == 1:
                 randomize_items = False
                 randomize_agents = True
-            elif current_stage == 2:
+            elif new_stage == 2:
                 randomize_items = True
                 randomize_agents = False
-            elif current_stage == 3:
+            elif new_stage == 3:
                 randomize_items = True
                 randomize_agents = True
             else:
                 return
             
+            result["current_stage"] = new_stage
+
             print(
-                f"Switching ranomization on all EnvRunners to randomize_items={randomize_items}, randomize_agents={randomize_agents} (False, False=easiest, "
+                f"Switching randomization on all EnvRunners to randomize_items={randomize_items}, randomize_agents={randomize_agents} (False, False=easiest, "
                 f"True, True=hardest), b/c R={current_return} on current task."
             )
             algorithm.env_runner_group.foreach_env_runner(
@@ -120,7 +129,7 @@ class EnvRandomizationCallback(RLlibCallback):
             )
         # Emergency brake: If return is smaller than -100 AND we are already at a harder task (1, 2, or
         # 3), we go back to stage=0.
-        elif current_return < -100 and current_stage > 0:
+        elif current_return < -100 and new_stage > 0:
             print(
                 "Emergency brake: Our policy seemed to have collapsed -> Setting task "
                 "back to 0."
@@ -128,12 +137,13 @@ class EnvRandomizationCallback(RLlibCallback):
             algorithm.env_runner_group.foreach_env_runner(
                 func=partial(_remote_fn, randomize_items=False, randomize_agents=False)
             )
-            current_stage = 0
+            new_stage = 0
+        algorithm._counters["current_stage"] = new_stage
 
 
 
 
-def define_training(centralized, human_policy, policies_to_train):
+def define_training(centralized, human_policy, policies_to_train, env_config):
     config = (
         PPOConfig()
         .callbacks(EnvRandomizationCallback)
@@ -141,7 +151,7 @@ def define_training(centralized, human_policy, policies_to_train):
             enable_rl_module_and_learner=True,
             enable_env_runner_and_connector_v2=True,
         )
-        .environment("Overcooked")
+        .environment("Overcooked", env_config=env_config)
         .env_runners( # define how many envs to run in parallel and resources per env
             num_envs_per_env_runner=2,
             num_cpus_per_env_runner=8,
@@ -163,7 +173,7 @@ def define_training(centralized, human_policy, policies_to_train):
     )
 
     model_config = DefaultModelConfig()
-    model_config.fcnet_hiddens = [64, 64, 64] # hidden layers
+    model_config.fcnet_hiddens = [512, 512] # hidden layers TODO: try [512, 512, 512] ?
     model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
     #model_config.use_lstm = True # use LSTM so we have memory
     #model_config.lstm_cell_size = 128 
@@ -237,9 +247,9 @@ def train(args, config):
     tuner.fit()
 
 def main(args):
-    define_env(args)
+    env_config = define_env(args)
     human_policy, policies_to_train = define_agents(args)
-    config = define_training(args.centralized, human_policy, policies_to_train)
+    config = define_training(args.centralized, human_policy, policies_to_train, env_config)
     train(args, config)
 
 if __name__ == "__main__":
