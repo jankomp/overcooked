@@ -15,7 +15,7 @@ TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato sala
 
 class Overcooked_multi(MultiAgentEnv):
 
-    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, randomize_items=False, randomize_agents=False, ind_reward=False, ind_distance=False, reward_distance=False):
+    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, rotate_map=False, randomize_items=False, randomize_agents=False, ind_reward=False, ind_distance=False, reward_distance=False):
         super().__init__()
         self.step_count = 0
         self.centralized = centralized
@@ -39,6 +39,7 @@ class Overcooked_multi(MultiAgentEnv):
             self.mapType = map_type
         self.debug = debug
         self.mode = mode
+        self.rotate_map = rotate_map
         self.randomize_items = randomize_items
         self.randomize_agents = randomize_agents
 
@@ -206,6 +207,11 @@ class Overcooked_multi(MultiAgentEnv):
                     if map[s_index[0]][s_index[1]] == 0:
                         break
                 map[s_index[0]][s_index[1]] = cell_type
+            
+            if self.rotate_map:
+                rotations = np.random.randint(0, 4)
+                for _ in range(rotations):
+                    map = np.rot90(map)
 
         try: 
             return map
