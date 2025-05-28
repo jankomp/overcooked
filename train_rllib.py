@@ -104,8 +104,9 @@ class EnvRandomizationCallback(RLlibCallback):
         result["current_stage"] = current_stage
         current_return = result[ENV_RUNNER_RESULTS][EPISODE_RETURN_MEAN]
         #print("current_return", current_return)
-        if current_return > 100: # TODO: should threshold be 100, 200, or 300?
+        if current_return > 300: # TODO: should threshold be 100, 200, 300, or 400?
             new_stage = current_stage + 1
+            result["current_stage"] = new_stage
             if new_stage == 1:
                 randomize_items = False
                 randomize_agents = True
@@ -117,21 +118,19 @@ class EnvRandomizationCallback(RLlibCallback):
                 randomize_agents = True
             else:
                 return
-            
-            result["current_stage"] = new_stage
 
             print(
                 f"Switching randomization on all EnvRunners to randomize_items={randomize_items}, randomize_agents={randomize_agents} (False, False=easiest, "
-                f"True, True=hardest), b/c R={current_return} on current task."
+                f"True, True=hardest), b/c R={current_return} on current stage."
             )
             algorithm.env_runner_group.foreach_env_runner(
                 func=partial(_remote_fn, randomize_items=randomize_items, randomize_agents=randomize_agents)
             )
         # Emergency brake: If return is smaller than -100 AND we are already at a harder task (1, 2, or
         # 3), we go back to stage=0.
-        elif current_return < -100 and new_stage > 0:
+        elif current_return < -120 and new_stage > 0:
             print(
-                "Emergency brake: Our policy seemed to have collapsed -> Setting task "
+                "Emergency brake: Our policy seems to have collapsed -> Setting stage "
                 "back to 0."
             )
             algorithm.env_runner_group.foreach_env_runner(
@@ -238,8 +237,8 @@ def train(args, config):
             storage_path=storage_path,
             name=experiment_name,
             stop={
-                "training_iteration": 10_000,
-                "env_runners/episode_return_mean": 400,
+                "training_iteration": 100_000,
+                "current_stage": 4,
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
