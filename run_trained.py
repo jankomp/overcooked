@@ -33,7 +33,7 @@ def define_environment(centralized):
     env_params = {
         "centralized": centralized,
         "grid_dim": [5, 5],
-        "task": "tomato salad",
+        "task": "lettuce-onion-tomato salad",
         "rewardList": reward_config,
         "map_type": "A",
         "mode": "vector",
