@@ -15,7 +15,7 @@ TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato sala
 
 class Overcooked_multi(MultiAgentEnv):
 
-    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, rotate_map=False, randomize_items=False, randomize_agents=False, ind_reward=False, ind_distance=False, reward_distance=False):
+    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, rotate_map=False, randomized_items=0, randomized_agents=False, ind_reward=False, ind_distance=False, reward_distance=False):
         super().__init__()
         self.step_count = 0
         self.centralized = centralized
@@ -40,8 +40,8 @@ class Overcooked_multi(MultiAgentEnv):
         self.debug = debug
         self.mode = mode
         self.rotate_map = rotate_map
-        self.randomize_items = randomize_items
-        self.randomize_agents = randomize_agents
+        self.randomized_items = randomized_items
+        self.randomized_agents = randomized_agents
 
         self.reward = None
         self.ind_reward = ind_reward
@@ -188,25 +188,36 @@ class Overcooked_multi(MultiAgentEnv):
             counter_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 1 and self. _value_in_4_connectivity(map, row, col, 0)]
             space_indices = [(row, col) for row, array in enumerate(map) for col, value in enumerate(array) if value == 0]
             # "space": 0, "counter": 1, "agent": 2, "tomato": 3, "lettuce": 4, "plate": 5, "knife": 6, "delivery": 7, "onion": 8
-            i = 0
-            for cell_type in [ITEMIDX['tomato'], ITEMIDX['lettuce'], ITEMIDX['plate'], ITEMIDX['plate'], ITEMIDX['knife'], ITEMIDX['knife'], ITEMIDX['delivery'], ITEMIDX['onion']]:
+            items = [ITEMIDX['tomato'], ITEMIDX['lettuce'], ITEMIDX['onion'], ITEMIDX['plate'], ITEMIDX['plate'], ITEMIDX['knife'], ITEMIDX['knife'], ITEMIDX['delivery']]
+            #n_random = self.randomized_items if self.randomized_items < len(items) else len(items)
+            #random_items = np.random.choice(range(len(items)), n_random, replace=False)
+            random_items = range(self.randomized_items)
+            non_random_items = [i for i in range(len(items)) if i not in random_items]
+            for i in non_random_items:
+                c_index = counter_indices[i]
+                map[c_index[0]][c_index[1]] = items[i]
+            for i in random_items:
                 while True:
-                    index = np.random.choice(range(len(counter_indices))) if self.randomize_items else i
-                    i += 1
+                    index = np.random.choice(range(len(counter_indices)))
                     c_index = counter_indices[index]
                     if map[c_index[0]][c_index[1]] == 1:
                         break
-                map[c_index[0]][c_index[1]] = cell_type
+                map[c_index[0]][c_index[1]] = items[i]
 
-            i = 0
-            for cell_type in [ITEMIDX['agent']] * self.n_agents:
+            agents = [ITEMIDX['agent']] * self.n_agents
+            n_random = self.randomized_agents if self.randomized_agents < len(agents) else len(agents)
+            random_agents = np.random.choice(range(len(agents)), n_random, replace=False)
+            non_random_agents = [i for i in range(len(agents)) if i not in random_agents]
+            for i in non_random_agents:
+                c_index = space_indices[i]
+                map[c_index[0]][c_index[1]] = agents[i]
+            for i in random_agents:
                 while True:
-                    index = np.random.choice(range(len(space_indices))) if self.randomize_agents else i
-                    i += 1
-                    s_index = space_indices[index]
-                    if map[s_index[0]][s_index[1]] == 0:
+                    index = np.random.choice(range(len(space_indices)))
+                    c_index = space_indices[index]
+                    if map[c_index[0]][c_index[1]] == 0:
                         break
-                map[s_index[0]][s_index[1]] = cell_type
+                map[c_index[0]][c_index[1]] = agents[i]
             
             if self.rotate_map:
                 rotations = np.random.randint(0, 4)
@@ -218,9 +229,6 @@ class Overcooked_multi(MultiAgentEnv):
         except:
             raise Exception(f"Map not properly initialized. mapType: {self.mapType}, n_agents: {self.n_agents}")
         
-    def set_randomization(self, randomize_items, randomize_agents):
-        self.randomize_items = randomize_items
-        self.randomize_agents = randomize_agents
 
     def _value_in_4_connectivity(self, map, i, j, value):
         shape = np.array(map).shape
@@ -902,7 +910,7 @@ class Overcooked_multi(MultiAgentEnv):
             rewards = {agent: self.reward for agent in self.agents}
         infos = {agent: info for agent in self.agents}
         truncated = False
-
+        rewards = {k: rewards[k] / 200.0 for k in rewards}
         if self.debug:
             print("rewards:", rewards)
 

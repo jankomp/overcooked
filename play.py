@@ -60,6 +60,9 @@ class Player:
             'debug': args['debug'],
             'centralized': args['centralized'],
             "max_episode_length": 100,
+            "randomized_items": 5,
+            "randomized_agents": 2,
+            "rotate_map": True
         }
         self.env = Overcooked_multi(**self.env_params)
         self.centralized = args['centralized']
