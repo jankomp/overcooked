@@ -22,11 +22,11 @@ import numpy as np
 
 def define_environment(centralized):
     reward_config = {
-        "metatask failed": -5,
+        "metatask failed": -1,
         "pretask finished": 5,
         "subtask finished": 10,
         "correct delivery": 200,
-        "wrong delivery": -50,
+        "wrong delivery": -5,
         "step penalty": -0.5,
         "right step": 0.5,
     }
@@ -41,6 +41,9 @@ def define_environment(centralized):
         "agents": ['ai', 'human'] if centralized else ['ai1', 'ai2', 'human'],
         "n_players": 3,
         "max_episode_length": 100,
+        "randomized_items": 0,
+        "randomized_agents": 0,
+        "rotate_map": False
     }
 
     env = Overcooked_multi(**env_params)
@@ -167,7 +170,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
-    parser.add_argument("--rl_module", default="learned", type=str)
+    parser.add_argument("--rl_module", default="random", type=str)
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
     parser.add_argument("--n_episodes", default=3, type=int, help="how many episodes should be run at once?")
 
