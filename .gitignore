@@ -123,3 +123,6 @@ output.csv
 train_rllib_human.py
 legacy/
 
+#study log files
+*.csv
+*.zip

@@ -257,7 +257,7 @@ def train(args, config):
             name=experiment_name,
             stop={
                 "training_iteration": 1_000,
-                "env_runners/episode_return_mean": 5.0,
+                "env_runners/episode_return_mean": 10.0,
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )

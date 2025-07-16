@@ -1301,7 +1301,7 @@ class Overcooked_multi(MultiAgentEnv):
                 other_plate = item
 
         # if there is no other plate, the other plate contains no food, or the other plate contains no food of the task, we can safely put the food on the plate
-        if (other_plate is None) or (not other_plate.containing) or not any([food for food in other_plate.containing if food.rawName in self.task]):
+        if (other_plate is None) or (not other_plate.containing): #or not any([food for food in other_plate.containing if food.rawName in self.task]):
             plate.contain(food)
             return True
         # if the other plate contains food from our task, we can not put the food on this plate

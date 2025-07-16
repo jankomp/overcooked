@@ -179,7 +179,7 @@ class Player:
             row = [obs['human']]
             self.step += 1
             input_human = ""
-            while input_human not in ['w', 'a', 's', 'd']:
+            while input_human not in ['w', 'a', 's', 'd', 'q']:
                 input_human = input("Input Human: ").strip().split(" ")[0]
 
             if input_human == ['p']:
@@ -244,6 +244,7 @@ class Player:
         columns = data[0]
         # Extract data
         data = data[1:]
+        print(f"steps: {len(data)}")
         # Create DataFrame
         df = pd.DataFrame(data, columns=columns)
         # Save to CSV
