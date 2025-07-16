@@ -1,15 +1,16 @@
 import time
+import glob
 import ray
 from ray.train import RunConfig, CheckpointConfig
 from environment.Overcooked import Overcooked_multi
 from ray.tune.registry import register_env
 from ray.rllib.core.rl_module.multi_rl_module import MultiRLModuleSpec
 from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
-from ray.rllib.core.rl_module.rl_module import RLModuleSpec
+from ray.rllib.core.rl_module.rl_module import RLModuleSpec, RLModule
 from ray import tune
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.callbacks.callbacks import RLlibCallback
-from Agents import AlwaysStationaryRLM, RandomRLM
+from Agents import AlwaysStationaryRLM, RandomRLM, HybridRandomRLM
 import os
 from functools import partial
 from ray.rllib.algorithms.algorithm import Algorithm
@@ -18,6 +19,12 @@ from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
 from ray.rllib.utils.metrics import (
     ENV_RUNNER_RESULTS,
     EPISODE_RETURN_MEAN,
+)
+from ray.rllib.core import (
+    COMPONENT_LEARNER_GROUP,
+    COMPONENT_LEARNER,
+    COMPONENT_RL_MODULE,
+    DEFAULT_POLICY_ID
 )
 
 def define_env(args):
@@ -56,6 +63,34 @@ def define_env(args):
 
     return env_config
 
+def load_trained_human(checkpoint_path):
+    current_dir = os.getcwd()
+    storage_path = os.path.join(current_dir, checkpoint_path)
+    p = f"{storage_path}*"
+    experiment_name = glob.glob(p)[-1]
+    print(f"Loading results from {experiment_name}...")
+    restored_tuner = tune.Tuner.restore(experiment_name, trainable="PPO")
+    result_grid = restored_tuner.get_results()
+    best_result = result_grid.get_best_result(metric=f"{ENV_RUNNER_RESULTS}/{EPISODE_RETURN_MEAN}", mode="max")
+    print(best_result.config)
+    best_checkpoint = best_result.checkpoint
+
+    human_module = RLModule.from_checkpoint(os.path.join(
+        best_checkpoint.path,
+        COMPONENT_LEARNER_GROUP,
+        COMPONENT_LEARNER,
+        COMPONENT_RL_MODULE,
+        'human'
+    ))
+    human_module_spec = RLModuleSpec(
+        module_class=type(human_module),
+        observation_space=human_module.observation_space,
+        action_space=human_module.action_space,
+        model_config={'base_module': human_module}
+    )
+    return human_module_spec
+
+
 def define_agents(args):
     '''
     Define the human agent policy and the policies to train.
@@ -67,10 +102,13 @@ def define_agents(args):
         human_policy = RLModuleSpec(module_class=AlwaysStationaryRLM)
     elif args.rl_module == 'random':
         human_policy = RLModuleSpec(module_class=RandomRLM)
-    elif args.rl_module == 'learned':
-        human_policy = RLModuleSpec()
+    elif args.rl_module == 'learn':
+        human_policy = RLModuleSpec(model_config=custom_model_config())
         policies_to_train = ['ai', 'human'] if args.centralized else ['ai1', 'ai2', 'human']
         return human_policy, policies_to_train
+    elif args.rl_module == 'hybrid':
+        assert args.checkpoint_path, "If you want to train the AI with a hybrid human module, you have to specify the checkpoint path to the module!"
+        human_policy = load_trained_human(args.checkpoint_path)
     else:
         raise NotImplementedError(f"{args.rl_module} not a valid human agent")
     
@@ -159,7 +197,15 @@ class EnvRandomizationCallback(RLlibCallback):
         algorithm._counters["current_stage"] = new_stage
 
 
-
+def custom_model_config():
+    model_config = DefaultModelConfig()
+    model_config.fcnet_hiddens = [256, 256] # hidden layers
+    model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
+    #model_config.use_lstm = True # use LSTM so we have memory
+    #model_config.lstm_cell_size = 128 
+    #model_config.lstm_use_prev_action = True
+    #model_config.lstm_use_prev_reward = True
+    return model_config
 
 def define_training(centralized, human_policy, policies_to_train, env_config):
     config = (
@@ -190,14 +236,7 @@ def define_training(centralized, human_policy, policies_to_train, env_config):
         )
     )
 
-    model_config = DefaultModelConfig()
-    model_config.fcnet_hiddens = [256, 256] # hidden layers
-    model_config.fcnet_activation = 'relu' # relu activation instead of default (tanh)
-    #model_config.use_lstm = True # use LSTM so we have memory
-    #model_config.lstm_cell_size = 128 
-    #model_config.lstm_use_prev_action = True
-    #model_config.lstm_use_prev_reward = True
-    rl_module_spec = RLModuleSpec(model_config=model_config)
+    rl_module_spec = RLModuleSpec(model_config=custom_model_config())
 
 
     if centralized:
@@ -276,11 +315,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
-    parser.add_argument("--rl_module", default="random", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
+    parser.add_argument("--rl_module", default="random", help = "Set the policy of the human, can be stationary, random, hybrid or learn")
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
     parser.add_argument("--ind_reward", action="store_true", help="True for individual reward, False for shared reward")
     parser.add_argument("--ind_distance", action="store_true", help="True for individual distance, False for shared distance")
     parser.add_argument("--reward_distance", action="store_true", help="True for incorporating item distance into rewards, False for not")
+    parser.add_argument("--checkpoint_path", help="The path to the trained policy the human module is taken from if we are using rl_module hybrid.")
     args = parser.parse_args()
 
     ip = main(args)
