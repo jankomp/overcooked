@@ -68,8 +68,8 @@ def define_agents(args):
     elif args.rl_module == 'random':
         human_policy = RLModuleSpec(module_class=RandomRLM)
     elif args.rl_module == 'learned':
-        human_policy = RLModuleSpec(module_class=RandomRLM) if args.centralized else RLModuleSpec()
-        policies_to_train = ['ai'] if args.centralized else ['ai1', 'ai2', 'human']
+        human_policy = RLModuleSpec()
+        policies_to_train = ['ai', 'human'] if args.centralized else ['ai1', 'ai2', 'human']
         return human_policy, policies_to_train
     else:
         raise NotImplementedError(f"{args.rl_module} not a valid human agent")
@@ -164,7 +164,7 @@ class EnvRandomizationCallback(RLlibCallback):
 def define_training(centralized, human_policy, policies_to_train, env_config):
     config = (
         PPOConfig()
-        .callbacks(EnvRandomizationCallback)
+        #.callbacks(EnvRandomizationCallback)
         .api_stack( #reduce some warning
             enable_rl_module_and_learner=True,
             enable_env_runner_and_connector_v2=True,
@@ -256,8 +256,8 @@ def train(args, config):
             storage_path=storage_path,
             name=experiment_name,
             stop={
-                "training_iteration": 100_000,
-                "current_stage": 21,
+                "training_iteration": 1_000,
+                "env_runners/episode_return_mean": 10.0,
             },
             checkpoint_config=CheckpointConfig(checkpoint_frequency=10, checkpoint_at_end=True, num_to_keep=2), # save a checkpoint every 10 iterations
         )
@@ -276,7 +276,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
-    parser.add_argument("--rl_module", default="learned", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
+    parser.add_argument("--rl_module", default="random", help = "Set the policy of the human, can be stationary, random, or learned") #TODO: use learned policy and figure that out
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
     parser.add_argument("--ind_reward", action="store_true", help="True for individual reward, False for shared reward")
     parser.add_argument("--ind_distance", action="store_true", help="True for individual distance, False for shared distance")

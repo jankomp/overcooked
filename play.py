@@ -60,9 +60,9 @@ class Player:
             'debug': args['debug'],
             'centralized': args['centralized'],
             "max_episode_length": 100,
-            "randomized_items": 5,
-            "randomized_agents": 2,
-            "rotate_map": True
+            "randomized_items": 0,
+            "randomized_agents": 0,
+            "rotate_map": False
         }
         self.env = Overcooked_multi(**self.env_params)
         self.centralized = args['centralized']
@@ -179,7 +179,7 @@ class Player:
             row = [obs['human']]
             self.step += 1
             input_human = ""
-            while input_human not in ['w', 'a', 's', 'd']:
+            while input_human not in ['w', 'a', 's', 'd', 'q']:
                 input_human = input("Input Human: ").strip().split(" ")[0]
 
             if input_human == ['p']:
@@ -244,6 +244,7 @@ class Player:
         columns = data[0]
         # Extract data
         data = data[1:]
+        print(f"steps: {len(data)}")
         # Create DataFrame
         df = pd.DataFrame(data, columns=columns)
         # Save to CSV
@@ -261,7 +262,7 @@ if __name__ == '__main__':
     parser.add_argument('--agent', type=str, default='learned', help='Human, stationary, random, or learned')
     parser.add_argument("--save_dir", default="runs", type=str)
     parser.add_argument("--name", default="run", type=str)
-    parser.add_argument("--rl_module", default="learned", type=str)
+    parser.add_argument("--rl_module", default="random", type=str)
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
     parser.add_argument("--deterministic", action="store_true", help="Deterministic actions?")
 
