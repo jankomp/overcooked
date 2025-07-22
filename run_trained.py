@@ -20,7 +20,7 @@ import os
 from ray.rllib.utils.numpy import convert_to_numpy, softmax
 import numpy as np
 
-def define_environment(centralized):
+def define_environment(centralized, stack_frames):
     reward_config = {
         "metatask failed": -1,
         "pretask finished": 5,
@@ -43,7 +43,8 @@ def define_environment(centralized):
         "max_episode_length": 100,
         "randomized_items": 0,
         "randomized_agents": 0,
-        "rotate_map": False
+        "rotate_map": False,
+        "stack_frames": stack_frames,
     }
 
     env = Overcooked_multi(**env_params)
@@ -125,7 +126,7 @@ def load_modules(args):
 
 
 def main(args):
-    env = define_environment(args.centralized)
+    env = define_environment(args.centralized, args.stack_frames)
 
     if args.centralized:
         ai_module, human_module = load_modules(args)
@@ -173,6 +174,7 @@ if __name__ == "__main__":
     parser.add_argument("--rl_module", default="random", type=str)
     parser.add_argument("--centralized", action="store_true", help="True for centralized training, False for decentralized training")
     parser.add_argument("--n_episodes", default=3, type=int, help="how many episodes should be run at once?")
+    parser.add_argument("--stack_frames", default=1, type=int, help="How many previous steps should be included in the memory of the agent?")
 
     args = parser.parse_args()
 

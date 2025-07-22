@@ -54,6 +54,7 @@ def define_env(args):
         "ind_reward": args.ind_reward,  
         "ind_distance": args.ind_distance,
         "reward_distance": args.reward_distance,
+        "stack_frames": args.stack_frames,
     }
 
     register_env(
@@ -321,6 +322,7 @@ if __name__ == "__main__":
     parser.add_argument("--ind_distance", action="store_true", help="True for individual distance, False for shared distance")
     parser.add_argument("--reward_distance", action="store_true", help="True for incorporating item distance into rewards, False for not")
     parser.add_argument("--checkpoint_path", help="The path to the trained policy the human module is taken from if we are using rl_module hybrid.")
+    parser.add_argument("--stack_frames", default=1, type=int, help="How many previous steps should be included in the memory of the agent?")
     args = parser.parse_args()
 
     args.rl_module = 'learn'
