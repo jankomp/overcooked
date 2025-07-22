@@ -5,7 +5,7 @@ from .items import Tomato, Lettuce, Onion, Plate, Knife, Delivery, Agent, Food
 import copy
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 import gymnasium as gym
-from collections import Counter
+from collections import deque
 
 DIRECTION = [(0, 1), (1, 0), (0, -1), (-1, 0)]
 ITEMNAME = ["space", "counter", "agent", "tomato", "lettuce", "plate", "knife", "delivery", "onion"]
@@ -15,7 +15,7 @@ TASKLIST = ["tomato salad", "lettuce salad", "onion salad", "lettuce-tomato sala
 
 class Overcooked_multi(MultiAgentEnv):
 
-    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, rotate_map=False, randomized_items=0, randomized_agents=False, ind_reward=False, ind_distance=False, reward_distance=False):
+    def __init__(self, centralized, grid_dim, task, rewardList, map_type="A", mode="vector", debug=True, agents=["ai", "human"], n_players=2, max_episode_length=80, multi_map=False, switch_init_pos=False, rotate_map=False, randomized_items=0, randomized_agents=False, ind_reward=False, ind_distance=False, reward_distance=False, stack_frames=1):
         super().__init__()
         self.step_count = 0
         self.centralized = centralized
@@ -50,6 +50,10 @@ class Overcooked_multi(MultiAgentEnv):
 
         self.initMap = self._initialize_map()
         self.map = copy.deepcopy(self.initMap)
+        if centralized:
+            self.obs_deque_dict = {'ai': deque(maxlen=stack_frames), 'human': deque(maxlen=stack_frames)}
+        else:
+            self.obs_deque_dict = {agent: deque(maxlen=stack_frames) for agent in self.agents}
 
         self.oneHotTask = [1 if t in self.task else 0 for t in TASKLIST]
 
@@ -585,27 +589,15 @@ class Overcooked_multi(MultiAgentEnv):
         """
         vec_obs = self._get_vector_obs()
 
-        # If observation radius is greater than 0, agents have partial observability
-        if self.obs_radius > 0:
-            if self.mode == "vector":
-                if self.centralized:
-                	#TODO: take obs radius into account
-                    return {"ai": np.array([agent_obs for agent_obs in vec_obs[:-1]]), "human": np.array([vec_obs[-1]]).squeeze()}
-                else:                    
-                    return {agent: np.asarray(vec_obs[i], dtype=np.float64) for i, agent in enumerate(self.agents)}
-            elif self.mode == "image":
-                return self._get_image_obs()
-        else:
-            # If observation radius is 0, agents have full observability
-            if self.mode == "vector":
-                if self.centralized:
-                    obs = {"ai": np.array(vec_obs[:-1]).flatten(), "human": np.array(vec_obs[-1])}
-                    return obs
-                else:       
-                    obs = {agent: np.asarray(vec_obs[i], dtype=np.float64) for i, agent in enumerate(self.agents)}           
-                    return obs
-            elif self.mode == "image":
-                return self._get_image_state()
+        for i, agent in enumerate(self.agents):
+            self.obs_deque_dict[agent].append(vec_obs[i])
+            # for the step 0, fill the dect with obs 0
+            while len(self.obs_deque_dict[agent]) < self.obs_deque_dict[agent].maxlen:
+                self.obs_deque_dict[agent].append(vec_obs[i])
+
+        obs = {agent: np.array(self.obs_deque_dict[agent]).flatten() for agent in self.obs_deque_dict}
+
+        return obs
 
     def _get_vector_obs(self):
 

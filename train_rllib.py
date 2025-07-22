@@ -323,4 +323,6 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_path", help="The path to the trained policy the human module is taken from if we are using rl_module hybrid.")
     args = parser.parse_args()
 
+    args.rl_module = 'learn'
+
     ip = main(args)
